@@ -1,0 +1,19 @@
+{
+  "name": "rural-health-copilot",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace @rhc/web",
+    "build": "npm run build --workspace @rhc/web",
+    "lint": "npm run lint --workspace @rhc/web",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "db:up": "docker compose up -d postgres",
+    "db:down": "docker compose down",
+    "db:migrate": "echo \"Run migrations with your chosen tool (Drizzle/Prisma).\""
+  }
+}
