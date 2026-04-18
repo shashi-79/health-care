@@ -11,12 +11,14 @@
     "build": "npm run build --workspace @rhc/web",
     "lint": "npm run lint --workspace @rhc/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "test": "npm run test --workspaces --if-present",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:migrate": "echo \"Run migrations with your chosen tool (Drizzle/Prisma).\""
   },
   "devDependencies": {
-    "typescript": "5.5.4"
+    "typescript": "5.5.4",
+    "vitest": "2.1.8"
   }
 }
