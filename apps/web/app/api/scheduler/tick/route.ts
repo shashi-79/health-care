@@ -1,6 +1,6 @@
-import { logEvent } from "@rhc/obs/index";
-import { listScheduledJobs, runDueJobs, scheduleJob } from "@rhc/scheduler/index";
-import type { ScheduledJobType } from "@rhc/types/index";
+import { logEvent } from "@rhc/obs";
+import { listScheduledJobs, runDueJobs, scheduleJob } from "@rhc/scheduler";
+import type { ScheduledJobType } from "@rhc/types";
 import { NextRequest, NextResponse } from "next/server";
 
 type TickBody = {

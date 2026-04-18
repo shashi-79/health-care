@@ -6,10 +6,10 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
-    "@google/genai": "^1.21.0",
-    "openai": "^4.104.0"
+    "@google/genai": "^1.50.1",
+    "openai": "^6.34.0"
   },
   "scripts": {
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.jsonc"
   }
 }

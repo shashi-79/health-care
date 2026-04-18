@@ -1,0 +1,894 @@
+import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { CAPTURE_PREVIEW_URL, formatCallDuration } from "./constants";
+import { buildDefaultDocumentPreview, buildSeededBrowserState } from "./data/seedData";
+import { loadCareChatBrowserState, saveCareChatBrowserState } from "./localSqliteStore";
+import type {
+  ActiveView,
+  ChatMessage,
+  ContactProfile,
+  DeferredPrompt,
+  DocumentPreview,
+  HistoryItem,
+  MediaDocItem,
+  MediaLinkItem,
+  MediaTab,
+  ScheduleItem,
+  ScheduleTone,
+  CareChatBrowserState
+} from "./types";
+
+const INITIAL_BROWSER_STATE = buildSeededBrowserState();
+
+const MESSAGE_ID_SEED = INITIAL_BROWSER_STATE.chatMessages.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+const HISTORY_ID_SEED = INITIAL_BROWSER_STATE.historyItems.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+const SESSION_STORAGE_KEY = "carechat.session.id";
+
+type ScheduleFormState = {
+  scheduleType: string;
+  title: string;
+  time: string;
+  duration: string;
+  notes: string;
+};
+
+type GroupedSchedules = {
+  dateNumber: string;
+  dayLabel: string;
+  items: ScheduleItem[];
+};
+
+type ApiChatResponse = {
+  ok: boolean;
+  triage?: {
+    level?: "mild" | "moderate" | "emergency";
+  };
+  assistant?: {
+    role: "assistant";
+    content: string;
+  };
+};
+
+const DEFAULT_SCHEDULE_FORM: ScheduleFormState = {
+  scheduleType: "Medicine Time",
+  title: "",
+  time: "",
+  duration: "",
+  notes: ""
+};
+
+function buildClientSessionId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return `care-${crypto.randomUUID()}`;
+  }
+  return `care-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function resolveInitialSessionId() {
+  if (typeof window === "undefined") {
+    return "default";
+  }
+
+  const stored = window.localStorage.getItem(SESSION_STORAGE_KEY);
+  if (stored) {
+    return stored;
+  }
+
+  const generated = buildClientSessionId();
+  window.localStorage.setItem(SESSION_STORAGE_KEY, generated);
+  return generated;
+}
+
+function scheduleToneFromType(scheduleType: string): ScheduleTone {
+  const lower = scheduleType.toLowerCase();
+  if (lower.includes("medicine")) return "success";
+  if (lower.includes("call")) return "warning";
+  return "primary";
+}
+
+function extractDocumentTitle(messages: ChatMessage[], fallbackTitle: string) {
+  const docMessage = messages.find((message) => message.kind === "doc");
+  if (docMessage && docMessage.fileName.trim().length > 0) {
+    return docMessage.fileName;
+  }
+
+  return fallbackTitle;
+}
+
+async function requestJson<T>(url: string, init?: RequestInit): Promise<T | null> {
+  try {
+    const response = await fetch(url, init);
+    const data = (await response.json()) as T;
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+export function useCareChatController() {
+  const [activeView, setActiveView] = useState<ActiveView>("chat");
+  const [chatMenuOpen, setChatMenuOpen] = useState(false);
+  const [attachSheetOpen, setAttachSheetOpen] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [addScheduleOpen, setAddScheduleOpen] = useState(false);
+  const [mediaTab, setMediaTab] = useState<MediaTab>("media");
+
+  const [sessionId] = useState(resolveInitialSessionId);
+
+  const [messageText, setMessageText] = useState("");
+  const [cameraCaption, setCameraCaption] = useState("");
+  const [cameraCaptured, setCameraCaptured] = useState(false);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_BROWSER_STATE.chatMessages);
+
+  const [historyItems, setHistoryItems] = useState<HistoryItem[]>(INITIAL_BROWSER_STATE.historyItems);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedCallIds, setSelectedCallIds] = useState<number[]>([]);
+
+  const [scheduleItems, setScheduleItems] = useState<ScheduleItem[]>(INITIAL_BROWSER_STATE.scheduleItems);
+  const [scheduleForm, setScheduleForm] = useState<ScheduleFormState>(DEFAULT_SCHEDULE_FORM);
+
+  const [contactProfile, setContactProfile] = useState<ContactProfile>(INITIAL_BROWSER_STATE.profile);
+  const [mediaImages, setMediaImages] = useState<string[]>(INITIAL_BROWSER_STATE.mediaImages);
+  const [mediaDocs, setMediaDocs] = useState<MediaDocItem[]>(INITIAL_BROWSER_STATE.mediaDocs);
+  const [mediaLinks, setMediaLinks] = useState<MediaLinkItem[]>(INITIAL_BROWSER_STATE.mediaLinks);
+  const [activeDocument, setActiveDocument] = useState<DocumentPreview>(() =>
+    buildDefaultDocumentPreview(INITIAL_BROWSER_STATE.mediaDocs[0]?.title)
+  );
+  const [localDataReady, setLocalDataReady] = useState(false);
+
+  const [callStatus, setCallStatus] = useState("Ringing...");
+  const [callDurationSeconds, setCallDurationSeconds] = useState(0);
+  const [isRinging, setIsRinging] = useState(false);
+
+  const [toastText, setToastText] = useState("Action completed");
+  const [toastVisible, setToastVisible] = useState(false);
+
+  const [deferredPrompt, setDeferredPrompt] = useState<DeferredPrompt | null>(null);
+
+  const messageIdRef = useRef(MESSAGE_ID_SEED);
+  const historyIdRef = useRef(HISTORY_ID_SEED);
+  const toastTimerRef = useRef<number | null>(null);
+  const callTimerRef = useRef<number | null>(null);
+  const callAnswerRef = useRef<number | null>(null);
+  const localStateLoadedRef = useRef(false);
+
+  const isChatView = activeView === "chat";
+
+  const voiceSendIcon = useMemo(() => {
+    return messageText.trim().length > 0 ? "➤" : "🎤";
+  }, [messageText]);
+
+  const groupedSchedules = useMemo<GroupedSchedules[]>(() => {
+    const map = new Map<string, GroupedSchedules>();
+
+    for (const item of scheduleItems) {
+      const key = `${item.dateNumber}-${item.dayLabel}`;
+      const bucket = map.get(key) ?? {
+        dateNumber: item.dateNumber,
+        dayLabel: item.dayLabel,
+        items: []
+      };
+      bucket.items.push(item);
+      map.set(key, bucket);
+    }
+
+    return [...map.values()].sort((a, b) => Number(a.dateNumber) - Number(b.dateNumber));
+  }, [scheduleItems]);
+
+  const calendarDatePills = useMemo(() => {
+    return groupedSchedules.map((group, index) => ({
+      key: `${group.dateNumber}-${group.dayLabel}`,
+      label: `${group.dayLabel} ${group.dateNumber}`,
+      isActive: index === 0
+    }));
+  }, [groupedSchedules]);
+
+  function hydrateFromBrowserState(nextState: CareChatBrowserState) {
+    setContactProfile({ ...nextState.profile });
+    setChatMessages(nextState.chatMessages.map((message) => ({ ...message })));
+    setHistoryItems(nextState.historyItems.map((item) => ({ ...item })));
+    setScheduleItems(nextState.scheduleItems.map((item) => ({ ...item })));
+    setMediaImages([...nextState.mediaImages]);
+    setMediaDocs(nextState.mediaDocs.map((item) => ({ ...item })));
+    setMediaLinks(nextState.mediaLinks.map((item) => ({ ...item })));
+
+    const nextMessageId = nextState.chatMessages.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+    messageIdRef.current = Math.max(MESSAGE_ID_SEED, nextMessageId);
+
+    const nextHistoryId = nextState.historyItems.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+    historyIdRef.current = Math.max(HISTORY_ID_SEED, nextHistoryId);
+
+    const fallbackTitle = nextState.mediaDocs[0]?.title ?? "Clinical_Records.pdf";
+    const documentTitle = extractDocumentTitle(nextState.chatMessages, fallbackTitle);
+    setActiveDocument(buildDefaultDocumentPreview(documentTitle));
+  }
+
+  function nextMessageId() {
+    const id = messageIdRef.current;
+    messageIdRef.current += 1;
+    return id;
+  }
+
+  function nextHistoryId() {
+    const id = historyIdRef.current;
+    historyIdRef.current += 1;
+    return id;
+  }
+
+  function showToast(message: string) {
+    setToastText(message);
+    setToastVisible(true);
+
+    if (toastTimerRef.current) {
+      window.clearTimeout(toastTimerRef.current);
+    }
+
+    toastTimerRef.current = window.setTimeout(() => {
+      setToastVisible(false);
+    }, 2500);
+  }
+
+  function triggerPickerById(inputId: string) {
+    const input = document.getElementById(inputId);
+    if (input instanceof HTMLInputElement) {
+      input.click();
+    }
+  }
+
+  function openGalleryPicker() {
+    triggerPickerById("gallery-input");
+  }
+
+  function openCameraPicker() {
+    triggerPickerById("camera-input");
+  }
+
+  function openDocumentPicker() {
+    triggerPickerById("document-input");
+  }
+
+  function closeOverlays() {
+    setChatMenuOpen(false);
+    setAttachSheetOpen(false);
+  }
+
+  function switchView(view: ActiveView) {
+    setActiveView(view);
+    closeOverlays();
+  }
+
+  function appendMessage(message: ChatMessage) {
+    setChatMessages((prev) => [...prev, message]);
+  }
+
+  async function sendMessageFromInput() {
+    const trimmed = messageText.trim();
+    if (!trimmed) {
+      showToast("Recording Voice...");
+      return;
+    }
+
+    appendMessage({
+      id: nextMessageId(),
+      kind: "text",
+      role: "patient",
+      text: trimmed,
+      time: "Just now"
+    });
+
+    setMessageText("");
+
+    const response = await requestJson<ApiChatResponse>("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        text: trimmed
+      })
+    });
+
+    if (!response?.ok || !response.assistant?.content) {
+      showToast("Message saved locally. Server sync pending.");
+      return;
+    }
+
+    appendMessage({
+      id: nextMessageId(),
+      kind: "text",
+      role: "bot",
+      text: response.assistant.content,
+      time: "Just now"
+    });
+
+    if (response.triage?.level === "emergency") {
+      showToast("Emergency signal detected. Please seek urgent care.");
+    }
+  }
+
+  function sendMockDoc(fileName = "New_Upload.pdf") {
+    const meta = "1 Page • 500 KB • PDF";
+
+    appendMessage({
+      id: nextMessageId(),
+      kind: "doc",
+      role: "patient",
+      fileName,
+      meta,
+      time: "Just now"
+    });
+
+    setMediaDocs((prev) => {
+      if (prev.some((item) => item.title === fileName)) {
+        return prev;
+      }
+      return [{ id: Date.now(), title: fileName, meta }, ...prev];
+    });
+
+    setActiveDocument(buildDefaultDocumentPreview(fileName));
+    showToast("Document Sent");
+  }
+
+  function notifyUpload(kind: string, file: File) {
+    void requestJson("/api/ingest/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        mimeType: file.type || undefined,
+        fileName: file.name,
+        sizeBytes: file.size,
+        text: `${kind} uploaded: ${file.name}`
+      })
+    });
+  }
+
+  function handleFileSelect(kind: "Photo" | "Gallery Media" | "Document", event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    closeOverlays();
+    showToast(`Selected ${kind}: ${file.name}`);
+
+    if (kind === "Document") {
+      sendMockDoc(file.name);
+    } else {
+      if (file.type.startsWith("image/")) {
+        const objectUrl = window.URL.createObjectURL(file);
+        setMediaImages((prev) => [objectUrl, ...prev].slice(0, 30));
+      }
+
+      appendMessage({
+        id: nextMessageId(),
+        kind: "text",
+        role: "patient",
+        text: `${kind} uploaded: ${file.name}`,
+        time: "Just now"
+      });
+    }
+
+    notifyUpload(kind, file);
+    event.target.value = "";
+  }
+
+  function openDocument() {
+    const fallbackTitle = mediaDocs[0]?.title ?? "Clinical_Records.pdf";
+    const documentTitle = extractDocumentTitle(chatMessages, fallbackTitle);
+    setActiveDocument(buildDefaultDocumentPreview(documentTitle));
+    switchView("document");
+  }
+
+  function openDocumentByName(fileName: string) {
+    setActiveDocument(buildDefaultDocumentPreview(fileName));
+    switchView("document");
+  }
+
+  function closeDocument() {
+    switchView("chat");
+  }
+
+  function openImage() {
+    showToast("Opening Image Fullscreen...");
+  }
+
+  function setCallTimerRefAndStatus() {
+    setCallStatus("00:00");
+    callTimerRef.current = window.setInterval(() => {
+      setCallDurationSeconds((prev) => {
+        const next = prev + 1;
+        setCallStatus(formatCallDuration(next));
+        return next;
+      });
+    }, 1000);
+  }
+
+  function startCall() {
+    setCallStatus("Ringing...");
+    setCallDurationSeconds(0);
+    setIsRinging(true);
+    switchView("calling");
+
+    void requestJson("/api/call/init", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId })
+    });
+
+    if (callTimerRef.current) {
+      window.clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+
+    if (callAnswerRef.current) {
+      window.clearTimeout(callAnswerRef.current);
+    }
+
+    callAnswerRef.current = window.setTimeout(() => {
+      setIsRinging(false);
+      setCallTimerRefAndStatus();
+    }, 3000);
+  }
+
+  function persistHistoryEntry(entry: HistoryItem) {
+    void requestJson("/api/care/history", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        entry
+      })
+    });
+  }
+
+  function endCall() {
+    if (callTimerRef.current) {
+      window.clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+
+    if (callAnswerRef.current) {
+      window.clearTimeout(callAnswerRef.current);
+      callAnswerRef.current = null;
+    }
+
+    const minutes = Math.floor(callDurationSeconds / 60);
+    const seconds = callDurationSeconds % 60;
+
+    appendMessage({
+      id: nextMessageId(),
+      kind: "system",
+      text: `Call Ended • ${minutes}m ${seconds}s`
+    });
+
+    const callEntry: HistoryItem = {
+      id: nextHistoryId(),
+      name: contactProfile.name,
+      time: "Just now",
+      type: "out",
+      avatar: contactProfile.avatarUrl
+    };
+
+    setHistoryItems((prev) => [callEntry, ...prev]);
+    persistHistoryEntry(callEntry);
+
+    setIsRinging(false);
+    setCallDurationSeconds(0);
+    switchView("chat");
+  }
+
+  function openCamera() {
+    setCameraCaptured(false);
+    setCameraCaption("");
+    switchView("camera");
+  }
+
+  function captureImage() {
+    setCameraCaptured(true);
+  }
+
+  function closeCamera() {
+    setCameraCaptured(false);
+    setCameraCaption("");
+    switchView("chat");
+  }
+
+  function sendCapturedImage() {
+    appendMessage({
+      id: nextMessageId(),
+      kind: "image",
+      role: "patient",
+      imageUrl: CAPTURE_PREVIEW_URL,
+      caption: cameraCaption.trim() || undefined,
+      time: "Just now"
+    });
+
+    setMediaImages((prev) => [CAPTURE_PREVIEW_URL, ...prev].slice(0, 30));
+
+    void requestJson("/api/ingest/upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        mimeType: "image/jpeg",
+        fileName: "captured-image.jpg",
+        text: cameraCaption.trim() || "Captured image sent"
+      })
+    });
+
+    closeCamera();
+  }
+
+  function openHistory() {
+    setSelectionMode(false);
+    setSelectedCallIds([]);
+    switchView("history");
+  }
+
+  function closeHistory() {
+    switchView("chat");
+  }
+
+  function showProfile() {
+    switchView("profile");
+  }
+
+  function closeProfile() {
+    switchView("chat");
+  }
+
+  function showMedia() {
+    setMediaTab("media");
+    switchView("media");
+  }
+
+  function closeMedia() {
+    switchView("chat");
+  }
+
+  function toggleBulkSelect() {
+    const next = !selectionMode;
+    setSelectionMode(next);
+    if (!next) {
+      setSelectedCallIds([]);
+    }
+  }
+
+  function handleHistoryItemClick(id: number) {
+    if (!selectionMode) return;
+
+    setSelectedCallIds((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((itemId) => itemId !== id);
+      }
+      return [...prev, id];
+    });
+  }
+
+  function deleteSingleHistory(id: number) {
+    setHistoryItems((prev) => prev.filter((item) => item.id !== id));
+    showToast("Call log deleted");
+
+    void requestJson("/api/care/history", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        ids: [id]
+      })
+    });
+  }
+
+  function deleteSelectedCalls() {
+    if (selectedCallIds.length === 0) {
+      setSelectionMode(false);
+      return;
+    }
+
+    setHistoryItems((prev) => prev.filter((item) => !selectedCallIds.includes(item.id)));
+    showToast(`${selectedCallIds.length} item(s) deleted`);
+
+    void requestJson("/api/care/history", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        ids: selectedCallIds
+      })
+    });
+
+    setSelectedCallIds([]);
+    setSelectionMode(false);
+  }
+
+  function setScheduleFormField(field: keyof ScheduleFormState, value: string) {
+    setScheduleForm((prev) => ({
+      ...prev,
+      [field]: value
+    }));
+  }
+
+  function saveSchedule() {
+    const title = scheduleForm.title.trim();
+    const time = scheduleForm.time.trim();
+
+    if (!title || !time) {
+      showToast("Title and time are required.");
+      return;
+    }
+
+    const tone = scheduleToneFromType(scheduleForm.scheduleType);
+
+    const localItem: ScheduleItem = {
+      id: Date.now(),
+      scheduleType: scheduleForm.scheduleType,
+      title,
+      time,
+      duration: scheduleForm.duration.trim(),
+      notes: scheduleForm.notes.trim(),
+      dateNumber: "9",
+      dayLabel: "Mon",
+      tone,
+      status: "pending"
+    };
+
+    setScheduleItems((prev) => [localItem, ...prev]);
+    setAddScheduleOpen(false);
+    closeOverlays();
+    setScheduleForm(DEFAULT_SCHEDULE_FORM);
+    showToast("Schedule Saved Successfully!");
+
+    void requestJson("/api/care/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        schedule: {
+          scheduleType: localItem.scheduleType,
+          title: localItem.title,
+          time: localItem.time,
+          duration: localItem.duration,
+          notes: localItem.notes,
+          dateNumber: localItem.dateNumber,
+          dayLabel: localItem.dayLabel,
+          tone: localItem.tone
+        }
+      })
+    });
+  }
+
+  function toggleScheduleStatus(id: number, checked: boolean) {
+    const status = checked ? "done" : "pending";
+
+    setScheduleItems((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item;
+        return {
+          ...item,
+          status
+        };
+      })
+    );
+
+    void requestJson("/api/care/schedule", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        id,
+        status
+      })
+    });
+  }
+
+  async function triggerInstall() {
+    closeOverlays();
+
+    if (!deferredPrompt) {
+      showToast("App installation not supported or already installed.");
+      return;
+    }
+
+    try {
+      await deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+    } catch {
+      showToast("Install prompt could not be shown.");
+    }
+
+    setDeferredPrompt(null);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const localState = await loadCareChatBrowserState();
+
+        if (cancelled) {
+          return;
+        }
+
+        hydrateFromBrowserState(localState);
+      } catch {
+        if (cancelled) {
+          return;
+        }
+      } finally {
+        if (!cancelled) {
+          localStateLoadedRef.current = true;
+          setLocalDataReady(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!localStateLoadedRef.current) {
+      return;
+    }
+
+    void saveCareChatBrowserState({
+      profile: contactProfile,
+      chatMessages,
+      historyItems,
+      scheduleItems,
+      mediaImages,
+      mediaDocs,
+      mediaLinks
+    });
+  }, [contactProfile, chatMessages, historyItems, mediaDocs, mediaImages, mediaLinks, scheduleItems]);
+
+  useEffect(() => {
+    function onBeforeInstallPrompt(event: Event) {
+      event.preventDefault();
+      setDeferredPrompt(event as unknown as DeferredPrompt);
+    }
+
+    window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!showSearch) return;
+    const searchInput = document.getElementById("search-input");
+    if (searchInput instanceof HTMLInputElement) {
+      searchInput.focus();
+    }
+  }, [showSearch]);
+
+  useEffect(() => {
+    const textarea = document.getElementById("chat-input");
+    if (!textarea) return;
+    if (!(textarea instanceof HTMLTextAreaElement)) return;
+
+    textarea.style.height = "auto";
+    textarea.style.height = `${Math.min(textarea.scrollHeight, 100)}px`;
+
+    if (messageText.trim().length === 0) {
+      textarea.style.height = "40px";
+    }
+  }, [messageText]);
+
+  useEffect(() => {
+    function onDocumentClick(event: MouseEvent) {
+      if (!(event.target instanceof Element)) return;
+
+      if (chatMenuOpen && !event.target.closest("#chat-menu") && !event.target.closest("#menu-trigger")) {
+        setChatMenuOpen(false);
+      }
+
+      if (attachSheetOpen && !event.target.closest("#attach-sheet") && !event.target.closest("#attach-trigger")) {
+        setAttachSheetOpen(false);
+      }
+    }
+
+    if (chatMenuOpen || attachSheetOpen) {
+      document.addEventListener("click", onDocumentClick);
+    }
+
+    return () => {
+      document.removeEventListener("click", onDocumentClick);
+    };
+  }, [attachSheetOpen, chatMenuOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (callTimerRef.current) {
+        window.clearInterval(callTimerRef.current);
+      }
+      if (callAnswerRef.current) {
+        window.clearTimeout(callAnswerRef.current);
+      }
+      if (toastTimerRef.current) {
+        window.clearTimeout(toastTimerRef.current);
+      }
+    };
+  }, []);
+
+  return {
+    sessionId,
+    localDataReady,
+    activeView,
+    chatMenuOpen,
+    attachSheetOpen,
+    showSearch,
+    calendarOpen,
+    addScheduleOpen,
+    mediaTab,
+    messageText,
+    cameraCaption,
+    cameraCaptured,
+    chatMessages,
+    historyItems,
+    selectionMode,
+    selectedCallIds,
+    scheduleItems,
+    groupedSchedules,
+    calendarDatePills,
+    scheduleForm,
+    contactProfile,
+    mediaImages,
+    mediaDocs,
+    mediaLinks,
+    activeDocument,
+    callStatus,
+    isRinging,
+    toastText,
+    toastVisible,
+    deferredPrompt,
+    isChatView,
+    voiceSendIcon,
+    setShowSearch,
+    setCalendarOpen,
+    setAddScheduleOpen,
+    setMediaTab,
+    setMessageText,
+    setCameraCaption,
+    setChatMenuOpen,
+    setAttachSheetOpen,
+    setScheduleFormField,
+    closeOverlays,
+    openDocument,
+    openDocumentByName,
+    closeDocument,
+    openImage,
+    startCall,
+    endCall,
+    openCamera,
+    captureImage,
+    closeCamera,
+    sendCapturedImage,
+    openHistory,
+    closeHistory,
+    showProfile,
+    closeProfile,
+    showMedia,
+    closeMedia,
+    toggleBulkSelect,
+    handleHistoryItemClick,
+    deleteSingleHistory,
+    deleteSelectedCalls,
+    saveSchedule,
+    toggleScheduleStatus,
+    triggerInstall,
+    handleFileSelect,
+    openGalleryPicker,
+    openCameraPicker,
+    openDocumentPicker,
+    sendMessageFromInput
+  };
+}
+
+export type CareChatViewModel = ReturnType<typeof useCareChatController>;

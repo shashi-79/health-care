@@ -1,11 +1,11 @@
-import { addUiMessage, listUiMessages } from "@rhc/db/index";
-import { buildSessionReport } from "@rhc/reporting/index";
+import { addUiMessage, listUiMessages } from "@rhc/db";
+import { buildSessionReport } from "@rhc/reporting";
 import {
   buildMemoryContext,
   getSessionMemory,
   patchSessionMemory
-} from "@rhc/rag/index";
-import type { SessionMemoryPatch, UiMessage } from "@rhc/types/index";
+} from "@rhc/rag";
+import type { SessionMemoryPatch, UiMessage } from "@rhc/types";
 import { NextRequest, NextResponse } from "next/server";
 
 type MemoryPatchBody = {

@@ -18,7 +18,10 @@
     "db:migrate": "echo \"Run migrations with your chosen tool (Drizzle/Prisma).\""
   },
   "devDependencies": {
-    "typescript": "5.5.4",
-    "vitest": "2.1.8"
+    "typescript": "6.0.3",
+    "vitest": "4.1.4"
+  },
+  "overrides": {
+    "eslint": "9.39.1"
   }
 }

@@ -1,0 +1,50 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/types/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/ai/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/policy/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/triage/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/ingest/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/agents/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/tools/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/rag/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/medical/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/safety/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/db/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/scheduler/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/reporting/tsconfig.jsonc"
+    },
+    {
+      "path": "packages/obs/tsconfig.jsonc"
+    },
+    {
+      "path": "apps/web/tsconfig.jsonc"
+    }
+  ]
+}

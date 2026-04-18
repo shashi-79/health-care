@@ -1,6 +1,7 @@
-import { openrouter } from "@rhc/ai/openrouter-client";
+import { getOpenRouterClient } from "@rhc/ai/openrouter-client";
 
 export async function transcribeAudio(base64Audio: string, format: "wav" | "mp3" | "ogg" = "wav") {
+  const openrouter = getOpenRouterClient();
   const completion = await openrouter.chat.completions.create({
     model: process.env.AUDIO_TRANSCRIBE_MODEL || "openai/gpt-4o-audio-preview",
     messages: [

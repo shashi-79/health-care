@@ -1,6 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true
+  reactStrictMode: true,
+  typescript: {
+    tsconfigPath: "./tsconfig.jsonc"
+  }
 };
 
 export default nextConfig;

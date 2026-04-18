@@ -1,0 +1,67 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "es2022"
+    ],
+    "strict": true,
+    "incremental": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowJs": false,
+    "isolatedModules": true,
+    "jsx": "preserve",
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "@rhc/types/*": [
+        "./packages/types/src/*"
+      ],
+      "@rhc/ai/*": [
+        "./packages/ai/src/*"
+      ],
+      "@rhc/policy/*": [
+        "./packages/policy/src/*"
+      ],
+      "@rhc/triage/*": [
+        "./packages/triage/src/*"
+      ],
+      "@rhc/ingest/*": [
+        "./packages/ingest/src/*"
+      ],
+      "@rhc/agents/*": [
+        "./packages/agents/src/*"
+      ],
+      "@rhc/tools/*": [
+        "./packages/tools/src/*"
+      ],
+      "@rhc/rag/*": [
+        "./packages/rag/src/*"
+      ],
+      "@rhc/medical/*": [
+        "./packages/medical/src/*"
+      ],
+      "@rhc/safety/*": [
+        "./packages/safety/src/*"
+      ],
+      "@rhc/db/*": [
+        "./packages/db/src/*"
+      ],
+      "@rhc/scheduler/*": [
+        "./packages/scheduler/src/*"
+      ],
+      "@rhc/reporting/*": [
+        "./packages/reporting/src/*"
+      ],
+      "@rhc/obs/*": [
+        "./packages/obs/src/*"
+      ]
+    }
+  }
+}
