@@ -15,5 +15,8 @@
     "db:up": "docker compose up -d postgres",
     "db:down": "docker compose down",
     "db:migrate": "echo \"Run migrations with your chosen tool (Drizzle/Prisma).\""
+  },
+  "devDependencies": {
+    "typescript": "5.5.4"
   }
 }
