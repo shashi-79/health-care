@@ -2,6 +2,7 @@ import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CAPTURE_PREVIEW_URL, formatCallDuration } from "./constants";
 import { buildDefaultDocumentPreview, buildSeededBrowserState } from "./data/seedData";
 import { loadCareChatBrowserState, saveCareChatBrowserState } from "./localBrowserStore";
+import { GeminiLiveAudio } from "./gemini-live-audio";
 import type {
   ActiveView,
   ChatMessage,
@@ -26,6 +27,7 @@ const SESSION_STORAGE_KEY = "carechat.session.id";
 type ScheduleFormState = {
   scheduleType: string;
   title: string;
+  date: string;
   time: string;
   duration: string;
   notes: string;
@@ -103,9 +105,17 @@ type ApiCallAction = "start_outgoing" | "simulate_incoming" | "accept" | "end" |
 
 type MicPermissionState = "unknown" | "granted" | "denied" | "unsupported";
 
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+function todayDateString() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 const DEFAULT_SCHEDULE_FORM: ScheduleFormState = {
   scheduleType: "Medicine Time",
   title: "",
+  date: "",
   time: "",
   duration: "",
   notes: ""
@@ -237,7 +247,9 @@ export function useCareChatController() {
   const isRingingRef = useRef(isRinging);
   const micPermissionStateRef = useRef<MicPermissionState>("unknown");
   const localMicStreamRef = useRef<MediaStream | null>(null);
+  const geminiAudioRef = useRef<GeminiLiveAudio | null>(null);
   const syncInFlightRef = useRef(false);
+  const firedScheduleIdsRef = useRef<Set<number>>(new Set());
 
   const isChatView = activeView === "chat";
 
@@ -367,6 +379,11 @@ export function useCareChatController() {
   }
 
   function stopMicAudioSession() {
+    if (geminiAudioRef.current) {
+      geminiAudioRef.current.stop();
+      geminiAudioRef.current = null;
+    }
+
     const stream = localMicStreamRef.current;
     if (!stream) {
       return;
@@ -485,7 +502,20 @@ export function useCareChatController() {
       setIsRinging(false);
       isRingingRef.current = false;
 
-      void ensureCallAudioSession();
+      void ensureCallAudioSession().then((ready) => {
+        if (ready && localMicStreamRef.current && !geminiAudioRef.current) {
+          try {
+            const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+            const callModel = process.env.NEXT_PUBLIC_CALL_MODEL || "gemini-2.5-flash-native-audio-preview-12-2025";
+            geminiAudioRef.current = new GeminiLiveAudio(apiKey, callModel);
+            void geminiAudioRef.current.startStream(localMicStreamRef.current, (text) => {
+              // Received transcript from model
+            });
+          } catch (err) {
+            console.error("Failed to start Gemini Live Audio:", err);
+          }
+        }
+      });
 
       if (!callTimerRef.current) {
         const elapsedSeconds = call.startedAtMs ? Math.max(0, Math.floor((Date.now() - call.startedAtMs) / 1000)) : 0;
@@ -1069,17 +1099,34 @@ export function useCareChatController() {
 
     const tone = scheduleToneFromType(scheduleForm.scheduleType);
 
+    // Compute date fields from the date picker (or default to today)
+    const dateStr = scheduleForm.date || todayDateString();
+    const dateObj = new Date(dateStr + "T00:00:00");
+    const dateNumber = String(dateObj.getDate());
+    const dayLabel = DAY_LABELS[dateObj.getDay()];
+
+    // Build full ISO datetime for precise bg worker matching
+    // time is in HH:MM format from the time input
+    const scheduleDate = new Date(`${dateStr}T${time}:00`).toISOString();
+
+    // Format time for display (e.g. "14:30" → "2:30 PM")
+    const [hh, mm] = time.split(":").map(Number);
+    const ampm = hh >= 12 ? "PM" : "AM";
+    const displayHour = hh % 12 || 12;
+    const displayTime = `${displayHour}:${String(mm).padStart(2, "0")} ${ampm}`;
+
     const localItem: ScheduleItem = {
       id: Date.now(),
       scheduleType: scheduleForm.scheduleType,
       title,
-      time,
+      time: displayTime,
       duration: scheduleForm.duration.trim(),
       notes: scheduleForm.notes.trim(),
-      dateNumber: "9",
-      dayLabel: "Mon",
+      dateNumber,
+      dayLabel,
       tone,
-      status: "pending"
+      status: "pending",
+      scheduleDate
     };
 
     setScheduleItems((prev) => [localItem, ...prev]);
@@ -1102,7 +1149,8 @@ export function useCareChatController() {
             notes: localItem.notes,
             dateNumber: localItem.dateNumber,
             dayLabel: localItem.dayLabel,
-            tone: localItem.tone
+            tone: localItem.tone,
+            scheduleDate: localItem.scheduleDate
           }
         })
       });
@@ -1228,6 +1276,91 @@ export function useCareChatController() {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
     // This effect should restart only when session identity/readiness changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localDataReady, sessionId]);
+
+  // ─── Schedule background worker: fires notifications at exact scheduled time ───
+  useEffect(() => {
+    if (!localDataReady) return;
+
+    const TICK_MS = 15_000; // check every 15 seconds for precision
+
+    function checkDueSchedules() {
+      const now = Date.now();
+
+      setScheduleItems((prev) => {
+        let changed = false;
+        const next = prev.map((item) => {
+          // Skip already done or already fired
+          if (item.status === "done") return item;
+          if (firedScheduleIdsRef.current.has(item.id)) return item;
+
+          // Parse the schedule time
+          let dueMs: number | null = null;
+
+          if (item.scheduleDate) {
+            // ISO datetime from new schedules
+            dueMs = new Date(item.scheduleDate).getTime();
+          } else {
+            // Legacy schedules: parse display time like "10:00 AM" against today
+            const match = item.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+            if (match) {
+              let h = parseInt(match[1], 10);
+              const m = parseInt(match[2], 10);
+              const period = match[3].toUpperCase();
+              if (period === "PM" && h !== 12) h += 12;
+              if (period === "AM" && h === 12) h = 0;
+              const today = new Date();
+              today.setHours(h, m, 0, 0);
+              dueMs = today.getTime();
+            }
+          }
+
+          if (dueMs === null || dueMs > now) return item;
+
+          // Schedule is due! Fire notification.
+          firedScheduleIdsRef.current.add(item.id);
+          changed = true;
+
+          // Toast
+          showToast(`⏰ ${item.title} — ${item.notes || item.scheduleType}`);
+
+          // Browser notification
+          void (async () => {
+            const perm = await ensureNotificationPermission();
+            if (perm === "granted" && typeof window !== "undefined") {
+              new window.Notification(`Schedule: ${item.title}`, {
+                body: `${item.scheduleType} • ${item.time}${item.notes ? " — " + item.notes : ""}`
+              });
+            }
+          })();
+
+          // Auto-trigger call for Call Time schedules
+          if (item.scheduleType.toLowerCase().includes("call")) {
+            setTimeout(() => startCall(), 1500);
+          }
+
+          // Mark as done on server
+          void (async () => {
+            await requestJson<ApiScheduleResponse>("/api/care/schedule", {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ sessionId, id: item.id, status: "done" })
+            });
+          })();
+
+          return { ...item, status: "done" as const };
+        });
+
+        return changed ? next : prev;
+      });
+    }
+
+    // Run immediately on mount, then on interval
+    checkDueSchedules();
+    const tickId = window.setInterval(checkDueSchedules, TICK_MS);
+
+    return () => window.clearInterval(tickId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localDataReady, sessionId]);
 

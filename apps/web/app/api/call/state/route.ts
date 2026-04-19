@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
 
   const contactName = typeof body.contactName === "string" && body.contactName.trim().length > 0
     ? body.contactName.trim()
-    : "John Doe";
+    : "Mohan";
 
   if (action === "start_outgoing") {
     return NextResponse.json({

@@ -35,7 +35,7 @@ function buildDefaultState(sessionId: string): StoredCallState {
     sessionId,
     status: "idle",
     direction: null,
-    contactName: "John Doe",
+    contactName: "Mohan",
     updatedAt: nowIso(),
     startedAtMs: null,
     endedAtMs: null,
@@ -59,7 +59,7 @@ export function getCallState(sessionId: string): CareCallState {
   return cloneCallState(getOrCreate(sessionId));
 }
 
-export function startOutgoingCall(sessionId: string, contactName = "John Doe") {
+export function startOutgoingCall(sessionId: string, contactName = "Mohan") {
   const state = getOrCreate(sessionId);
   state.status = "ringing";
   state.direction = "outgoing";
@@ -71,7 +71,7 @@ export function startOutgoingCall(sessionId: string, contactName = "John Doe") {
   return cloneCallState(state);
 }
 
-export function simulateIncomingCall(sessionId: string, contactName = "John Doe") {
+export function simulateIncomingCall(sessionId: string, contactName = "Mohan") {
   const state = getOrCreate(sessionId);
   state.status = "ringing";
   state.direction = "incoming";

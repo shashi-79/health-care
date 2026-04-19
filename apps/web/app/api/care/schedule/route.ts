@@ -12,6 +12,7 @@ type AddScheduleBody = {
     dateNumber?: string;
     dayLabel?: string;
     tone?: "primary" | "success" | "warning";
+    scheduleDate?: string;
   };
 };
 
@@ -71,7 +72,8 @@ export async function POST(request: NextRequest) {
     notes: schedule.notes ?? "",
     dateNumber: schedule.dateNumber ?? "",
     dayLabel: schedule.dayLabel ?? "",
-    tone: schedule.tone ?? "primary"
+    tone: schedule.tone ?? "primary",
+    scheduleDate: schedule.scheduleDate
   });
 
   return NextResponse.json({

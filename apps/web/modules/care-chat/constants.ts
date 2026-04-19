@@ -36,7 +36,7 @@ export const INITIAL_MESSAGES: ChatMessage[] = [
 export const INITIAL_HISTORY: HistoryItem[] = [
   {
     id: 1,
-    name: "John Doe",
+    name: "Mohan",
     time: "10:30 AM",
     type: "out",
     avatar: "https://i.pravatar.cc/150?img=32"
@@ -76,7 +76,7 @@ export const INITIAL_SCHEDULES: ScheduleItem[] = [
     title: "Review Lab Results",
     time: "1:30 PM",
     duration: "15 mins",
-    notes: "John Doe",
+    notes: "Mohan",
     dateNumber: "9",
     dayLabel: "Mon",
     tone: "success",

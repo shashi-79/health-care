@@ -11,7 +11,7 @@ import type {
 
 const SEEDED_PROFILE: ContactProfile = {
   id: 1,
-  name: "John Doe",
+  name: "Mohan",
   statusText: "Care chat ready",
   avatarUrl: "https://i.pravatar.cc/150?img=32",
   phone: "+1 234 567 8900",

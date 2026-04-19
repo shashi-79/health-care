@@ -11,6 +11,7 @@
     "worker": "tsx ../../packages/worker/src/worker.ts"
   },
   "dependencies": {
+    "@google/genai": "^1.50.1",
     "@rhc/agents": "*",
     "@rhc/ai": "^0.1.0",
     "@rhc/db": "*",

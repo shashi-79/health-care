@@ -21,6 +21,7 @@ export type CareScheduleItem = {
   dayLabel: string;
   tone: CareScheduleTone;
   status: "pending" | "done";
+  scheduleDate?: string;
 };
 
 type CareSessionState = {
@@ -35,7 +36,7 @@ const careStore = new Map<string, CareSessionState>();
 const DEFAULT_HISTORY: CareHistoryItem[] = [
   {
     id: 1,
-    name: "John Doe",
+    name: "Mohan",
     time: "10:30 AM",
     type: "out",
     avatar: "https://i.pravatar.cc/150?img=32"
@@ -75,7 +76,7 @@ const DEFAULT_SCHEDULES: CareScheduleItem[] = [
     title: "Review Lab Results",
     time: "1:30 PM",
     duration: "15 mins",
-    notes: "John Doe",
+    notes: "Mohan",
     dateNumber: "9",
     dayLabel: "Mon",
     tone: "success",
@@ -183,7 +184,8 @@ export function addScheduleItem(
     dateNumber: schedule.dateNumber,
     dayLabel: schedule.dayLabel,
     tone: schedule.tone,
-    status: schedule.status ?? "pending"
+    status: schedule.status ?? "pending",
+    scheduleDate: schedule.scheduleDate
   };
 
   state.schedules = [entry, ...state.schedules];

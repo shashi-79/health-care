@@ -27,6 +27,7 @@ export type ScheduleItem = {
   dayLabel: string;
   tone: ScheduleTone;
   status: ScheduleStatus;
+  scheduleDate?: string;
 };
 
 export type ContactProfile = {

@@ -46,19 +46,24 @@ export function AddScheduleOverlay({ vm }: CareChatViewProps) {
 
           <div className="schedule-grid">
             <label>
+              <span>Date</span>
+              <input type="date" value={vm.scheduleForm.date} onChange={(event) => vm.setScheduleFormField("date", event.target.value)} />
+            </label>
+            <label>
               <span>Time</span>
               <input type="time" value={vm.scheduleForm.time} onChange={(event) => vm.setScheduleFormField("time", event.target.value)} />
             </label>
-            <label>
-              <span>Duration/Days</span>
-              <input
-                type="text"
-                placeholder="e.g. 5 days"
-                value={vm.scheduleForm.duration}
-                onChange={(event) => vm.setScheduleFormField("duration", event.target.value)}
-              />
-            </label>
           </div>
+
+          <label>
+            <span>Duration/Days</span>
+            <input
+              type="text"
+              placeholder="e.g. 5 days"
+              value={vm.scheduleForm.duration}
+              onChange={(event) => vm.setScheduleFormField("duration", event.target.value)}
+            />
+          </label>
 
           <label>
             <span>Notes / Disease Purpose</span>

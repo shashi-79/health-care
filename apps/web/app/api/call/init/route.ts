@@ -5,7 +5,7 @@ import { assertCallModel } from "@rhc/policy/routing";
 import { buildMemoryContext, getSessionMemory } from "@rhc/rag/index";
 import { NextRequest, NextResponse } from "next/server";
 
-const DEFAULT_CALL_MODEL = "gemini-live-2.5-flash-preview";
+const DEFAULT_CALL_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025";
 const DEFAULT_CALL_AGENT_MODEL = "anthropic/claude-haiku-4.5";
 
 type CallInitRequestBody = {

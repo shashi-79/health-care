@@ -20,7 +20,6 @@ const worker = new Worker(
     } as any) as any;
 
     let medicalReference: string | undefined;
-
     if (bgResult.drugHints.length > 0) {
       medicalReference = `For non-critical symptom support, FDA label references suggest these general-use medicine options: ${bgResult.drugHints.join(", ")}. Mention as options only and advise clinician confirmation.`;
     }
