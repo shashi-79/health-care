@@ -1,5 +1,5 @@
-import { getOpenRouterClient } from "@rhc/ai/openrouter-client";
-import { assertBgModel } from "@rhc/policy/routing";
+import { getOpenRouterClient } from "@rhc/ai";
+import { assertBgModel } from "@rhc/policy";
 
 const DEFAULT_CALL_AGENT_TIMEOUT_MS = Number(process.env.CALL_AGENT_TIMEOUT_MS ?? 5000);
 
@@ -153,7 +153,7 @@ export async function runCallAgent(input: CallAgentInput): Promise<CallAgentResu
         {
           role: "system",
           content:
-            "You are preparing a live healthcare call copilot brief for a human-like assistant. Keep output practical, safety-first, and non-technical."
+            "You are preparing a live healthcare call copilot brief for a human-like assistant. Keep output practical, safety-first, and non-technical. Do NOT provide direct medicine dosage or prescription suggestions in the generated brief; leave ALL medication prescriptions out of the conversation. State that the background agent will handle prescriptions."
         },
         {
           role: "system",

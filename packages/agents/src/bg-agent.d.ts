@@ -1,4 +1,4 @@
-import type { BgPromptMessage, ContextBudget } from "@rhc/types/index";
+import type { BgPromptMessage, ContextBudget } from "@rhc/types";
 import { type LoopState } from "./loop-guard";
 export type BgAgentInput = {
     sessionId: string;

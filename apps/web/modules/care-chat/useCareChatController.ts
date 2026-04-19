@@ -248,6 +248,7 @@ export function useCareChatController() {
   const micPermissionStateRef = useRef<MicPermissionState>("unknown");
   const localMicStreamRef = useRef<MediaStream | null>(null);
   const geminiAudioRef = useRef<GeminiLiveAudio | null>(null);
+  const geminiInitInFlightRef = useRef(false);
   const syncInFlightRef = useRef(false);
   const firedScheduleIdsRef = useRef<Set<number>>(new Set());
 
@@ -383,6 +384,7 @@ export function useCareChatController() {
       geminiAudioRef.current.stop();
       geminiAudioRef.current = null;
     }
+    geminiInitInFlightRef.current = false;
 
     const stream = localMicStreamRef.current;
     if (!stream) {
@@ -502,20 +504,53 @@ export function useCareChatController() {
       setIsRinging(false);
       isRingingRef.current = false;
 
-      void ensureCallAudioSession().then((ready) => {
-        if (ready && localMicStreamRef.current && !geminiAudioRef.current) {
-          try {
-            const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-            const callModel = process.env.NEXT_PUBLIC_CALL_MODEL || "gemini-2.5-flash-native-audio-preview-12-2025";
-            geminiAudioRef.current = new GeminiLiveAudio(apiKey, callModel);
-            void geminiAudioRef.current.startStream(localMicStreamRef.current, (text) => {
-              // Received transcript from model
-            });
-          } catch (err) {
-            console.error("Failed to start Gemini Live Audio:", err);
+      // Guard: prevent double Gemini Live initialization from polling sync
+      if (!geminiInitInFlightRef.current) {
+        void ensureCallAudioSession().then((ready) => {
+          if (ready && localMicStreamRef.current && !geminiAudioRef.current && !geminiInitInFlightRef.current) {
+            geminiInitInFlightRef.current = true;
+            try {
+              const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
+              const callModel = process.env.NEXT_PUBLIC_CALL_MODEL || "gemini-2.5-flash-native-audio-preview-12-2025";
+              geminiAudioRef.current = new GeminiLiveAudio(apiKey, callModel);
+              void geminiAudioRef.current.startStream(
+                localMicStreamRef.current,
+                (text) => {
+                  // Received transcript from model
+                },
+                (name, args) => {
+                  if (name === "request_prescription_info" && args.drugName) {
+                    appendMessage({
+                      id: nextMessageId(),
+                      kind: "system",
+                      text: `Background Agent analyzing FDA profile for ${args.drugName}...`
+                    });
+                    
+                    void requestJson("/api/chat", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        sessionId,
+                        message: `drug: ${args.drugName}`,
+                        triageData: {
+                          level: "moderate",
+                          vitalTriggers: [],
+                          isEmergency: false,
+                          confidence: 1.0,
+                          matchedKeywords: [args.drugName]
+                        }
+                      })
+                    }).catch(() => {});
+                  }
+                }
+              );
+            } catch (err) {
+              geminiInitInFlightRef.current = false;
+              console.error("Failed to start Gemini Live Audio:", err);
+            }
           }
-        }
-      });
+        });
+      }
 
       if (!callTimerRef.current) {
         const elapsedSeconds = call.startedAtMs ? Math.max(0, Math.floor((Date.now() - call.startedAtMs) / 1000)) : 0;
@@ -841,9 +876,22 @@ export function useCareChatController() {
     setMicPermissionState("unknown");
     micPermissionStateRef.current = "unknown";
     setCallDirection("outgoing");
+    geminiInitInFlightRef.current = false;
     switchView("calling");
 
+    if (callTimerRef.current) {
+      window.clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+
+    if (callAnswerRef.current) {
+      window.clearTimeout(callAnswerRef.current);
+    }
+
+    // Serialized flow: init → state → auto-accept
+    // Ensures call brief is available before auto-accept fires
     void (async () => {
+      // 1. Fetch the call agent brief (may take up to 5s via OpenRouter)
       const init = await requestJson<ApiCallInitResponse>("/api/call/init", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -862,22 +910,18 @@ export function useCareChatController() {
       if (init?.usedCallAgent) {
         showToast("AI call agent brief ready");
       }
+
+      // 2. Register outgoing call state on server (after init completes)
+      await updateCallState("start_outgoing", contactProfile.name);
+
+      // 3. Auto-accept after a short ring delay (starts AFTER init, not in parallel)
+      if (callAnswerRef.current) {
+        window.clearTimeout(callAnswerRef.current);
+      }
+      callAnswerRef.current = window.setTimeout(() => {
+        void acceptCurrentCall();
+      }, 3000);
     })();
-
-    void updateCallState("start_outgoing", contactProfile.name);
-
-    if (callTimerRef.current) {
-      window.clearInterval(callTimerRef.current);
-      callTimerRef.current = null;
-    }
-
-    if (callAnswerRef.current) {
-      window.clearTimeout(callAnswerRef.current);
-    }
-
-    callAnswerRef.current = window.setTimeout(() => {
-      void acceptCurrentCall();
-    }, 3000);
   }
 
   async function persistHistoryEntry(entry: HistoryItem) {
@@ -932,10 +976,12 @@ export function useCareChatController() {
 
     void updateCallState("end");
 
-    const callSummary = declinedIncoming
-      ? `Missed incoming call from ${contactProfile.name}.`
-      : `${callDirection === "incoming" ? "Incoming" : "Outgoing"} call with ${contactProfile.name} lasted ${minutes}m ${seconds}s.`;
-    consolidateCallForBg(callSummary);
+    // Only consolidate for BG agent when the call was actually connected.
+    // Declined/missed calls with zero duration don't need BG processing.
+    if (!declinedIncoming && callDurationSeconds > 0) {
+      const callSummary = `${callDirection === "incoming" ? "Incoming" : "Outgoing"} call with ${contactProfile.name} lasted ${minutes}m ${seconds}s.`;
+      consolidateCallForBg(callSummary);
+    }
 
     setIsRinging(false);
     isRingingRef.current = false;

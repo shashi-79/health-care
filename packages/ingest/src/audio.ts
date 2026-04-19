@@ -1,4 +1,4 @@
-import { getOpenRouterClient } from "@rhc/ai/openrouter-client";
+import { getOpenRouterClient } from "@rhc/ai";
 
 const DEFAULT_AUDIO_TRANSCRIBE_TIMEOUT_MS = Number(process.env.AUDIO_TRANSCRIBE_TIMEOUT_MS ?? 5000);
 

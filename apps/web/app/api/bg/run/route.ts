@@ -1,9 +1,9 @@
-import { runBgAgent } from "@rhc/agents/bg-agent";
-import { listUiMessages } from "@rhc/db/index";
-import { logEvent } from "@rhc/obs/index";
-import { buildMemoryContext, getSessionMemory, patchSessionMemory } from "@rhc/rag/index";
-import type { BgPromptMessage } from "@rhc/types/index";
-import type { LoopState } from "@rhc/agents/loop-guard";
+import { runBgAgent } from "@rhc/agents";
+import { listUiMessages } from "@rhc/db";
+import { logEvent } from "@rhc/obs";
+import { buildMemoryContext, getSessionMemory, patchSessionMemory } from "@rhc/rag";
+import type { BgPromptMessage } from "@rhc/types";
+import type { LoopState } from "@rhc/agents";
 import { NextRequest, NextResponse } from "next/server";
 
 const DEFAULT_BG_MODEL = "anthropic/claude-haiku-4.5";

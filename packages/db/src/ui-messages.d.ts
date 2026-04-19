@@ -1,4 +1,4 @@
-import type { UiMessage } from "@rhc/types/index";
+import type { UiMessage } from "@rhc/types";
 type AddUiMessageInput = {
     sessionId: string;
     role: UiMessage["role"];

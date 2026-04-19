@@ -1,5 +1,5 @@
-import type { ObservationEvent, ObservationLevel } from "@rhc/types/index";
-import { redactSensitiveText } from "@rhc/safety/index";
+import type { ObservationEvent, ObservationLevel } from "@rhc/types";
+import { redactSensitiveText } from "@rhc/safety";
 
 type LogEventInput = {
 	category: string;
@@ -90,6 +90,9 @@ export function logEvent(input: LogEventInput): ObservationEvent {
 	};
 
 	eventStore.push(event);
+	if (eventStore.length > 2000) {
+		eventStore.shift();
+	}
 	return cloneEvent(event);
 }
 

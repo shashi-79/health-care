@@ -1,5 +1,5 @@
-import { addUiMessage } from "@rhc/db/index";
-import { detectInputKind, transcribeAudio } from "@rhc/ingest/index";
+import { addUiMessage } from "@rhc/db";
+import { detectInputKind, transcribeAudio } from "@rhc/ingest";
 import { NextRequest, NextResponse } from "next/server";
 
 type UploadBody = {

@@ -1,4 +1,4 @@
-import type { SessionMemory, UiMessage } from "@rhc/types/index";
+import type { SessionMemory, UiMessage } from "@rhc/types";
 export type SessionReportInput = {
     sessionId: string;
     memory: SessionMemory;

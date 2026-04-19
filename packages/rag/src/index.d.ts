@@ -1,4 +1,4 @@
-import type { SessionMemory, SessionMemoryPatch } from "@rhc/types/index";
+import type { SessionMemory, SessionMemoryPatch } from "@rhc/types";
 export declare function getSessionMemory(sessionId: string): SessionMemory;
 export declare function patchSessionMemory(sessionId: string, patch: SessionMemoryPatch): SessionMemory;
 export declare function listSessionMemories(): SessionMemory[];

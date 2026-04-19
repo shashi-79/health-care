@@ -1,6 +1,6 @@
-import { getOpenRouterClient } from "@rhc/ai/openrouter-client";
-import { assertChatModel } from "@rhc/policy/routing";
-import type { BgPromptMessage } from "@rhc/types/index";
+import { getOpenRouterClient } from "@rhc/ai";
+import { assertChatModel } from "@rhc/policy";
+import type { BgPromptMessage } from "@rhc/types";
 
 const DEFAULT_CHAT_AGENT_TIMEOUT_MS = Number(process.env.CHAT_AGENT_TIMEOUT_MS ?? 5500);
 const DEFAULT_CHAT_TRANSFER_TIMEOUT_MS = Number(process.env.CHAT_TRANSFER_TIMEOUT_MS ?? 3200);
@@ -212,7 +212,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     {
       role: "system",
       content:
-        "Give practical next steps. If emergency_signal is yes, prioritize urgent in-person escalation immediately before any other advice. If transfer_decision is transfer_to_bg and emergency_signal is no, use FDA-backed drug_hints as general-purpose options only, without exact dosage or certainty claims. Keep response concise (3-6 short sentences)."
+        "Give practical next steps. If emergency_signal is yes, prioritize urgent in-person escalation immediately before any other advice. VERY IMPORTANT: NEVER suggest general medications or precise dosages yourself directly. You MUST NOT prescribe anything. Only inform the user that the background medical analysis team will provide safe, age/weight-adjusted low dose suggestions via the background system. Keep response concise (3-6 short sentences)."
     },
     {
       role: "system",

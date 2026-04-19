@@ -1,5 +1,5 @@
-import { listEvents } from "@rhc/obs/index";
-import type { ObservationLevel } from "@rhc/types/index";
+import { listEvents } from "@rhc/obs";
+import type { ObservationLevel } from "@rhc/types";
 import { NextRequest, NextResponse } from "next/server";
 
 const ALLOWED_LEVELS: ObservationLevel[] = ["info", "warn", "error"];

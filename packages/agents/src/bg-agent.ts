@@ -1,9 +1,9 @@
-import { fetchDrugData } from "@rhc/medical/fda";
-import { getOpenRouterClient } from "@rhc/ai/openrouter-client";
-import { assertBgModel, assertToolsAllowedOnlyForBg } from "@rhc/policy/routing";
-import { buildEmergencyEscalationTemplate, containsEmergencySignal } from "@rhc/safety/index";
-import { buildContextBudget, fitMessagesToBudget, truncateTextToBudget } from "@rhc/tools/index";
-import type { BgPromptMessage, ContextBudget } from "@rhc/types/index";
+import { fetchDrugData } from "@rhc/medical";
+import { getOpenRouterClient } from "@rhc/ai";
+import { assertBgModel, assertToolsAllowedOnlyForBg } from "@rhc/policy";
+import { buildEmergencyEscalationTemplate, containsEmergencySignal } from "@rhc/safety";
+import { buildContextBudget, fitMessagesToBudget, truncateTextToBudget } from "@rhc/tools";
+import type { BgPromptMessage, ContextBudget } from "@rhc/types";
 import { shouldStopLoop, type LoopState } from "./loop-guard";
 
 export type BgAgentInput = {
@@ -312,7 +312,14 @@ export async function runBgAgent(input: BgAgentInput): Promise<BgAgentResult> {
         const completion: any = await openrouter.chat.completions.create({
           model: input.model,
           messages: [
-            { role: "system", content: "You are a clinical assistant tool orchestrator. If the user context requires information about a medicine, drug, or prescription, call the 'search_fda' tool with the exact name. Otherwise output 'none'." },
+            { role: "system", content: `You are an expert Clinical Pharmacist Tool Orchestrator balancing patient symptom triage with safe pharmacological mapping.
+Your primary objective is to analyze the patient's symptoms (from the prompt), along with their demographic profile (Age: ${patientAge ?? "unknown"}, Weight: ${patientWeightKg ? patientWeightKg + "kg" : "unknown"}).
+
+Rules of Engagement:
+1. Safe OTC First: For mild, general-purpose symptoms (e.g. headache, mild fever, minor aches, allergies), deduce the safest, most age- and weight-appropriate generic over-the-counter (OTC) medication (e.g. acetaminophen, ibuprofen, loratadine).
+2. Strict Escalation: If symptoms indicate severe distress, trauma, or a potential medical emergency—or are ambiguous—do NOT suggest medication. You MUST output exactly 'none'.
+3. Prescription Ban: NEVER suggest prescription-only antibiotics, heavily controlled substances, or complex therapies. Output 'none' if OTC is insufficient for the reported condition.
+4. Tool Execution: Once a safe generic OTC medicine is deduced, you MUST call the 'search_fda' tool using the exact generic drug name so the underlying system can robustly retrieve the latest, heavily safety-vetted FDA dosage rules and contraindications.` },
             { role: "user", content: input.query ?? promptPreview }
           ],
           tools: [{

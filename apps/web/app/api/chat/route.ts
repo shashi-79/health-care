@@ -1,16 +1,16 @@
-import { runBgAgent } from "@rhc/agents/bg-agent";
-import { runChatAgent, runChatTransferAgent } from "@rhc/agents/chat-agent";
-import { addUiMessage, listUiMessages } from "@rhc/db/index";
-import { logEvent } from "@rhc/obs/index";
-import { assertChatModel } from "@rhc/policy/routing";
-import { buildMemoryContext, getSessionMemory, patchSessionMemory } from "@rhc/rag/index";
+import { runBgAgent } from "@rhc/agents";
+import { runChatAgent, runChatTransferAgent } from "@rhc/agents";
+import { addUiMessage, listUiMessages } from "@rhc/db";
+import { logEvent } from "@rhc/obs";
+import { assertChatModel } from "@rhc/policy";
+import { buildMemoryContext, getSessionMemory, patchSessionMemory } from "@rhc/rag";
 import {
   applyAssistantGuardrails,
   buildEmergencyEscalationTemplate,
   containsEmergencySignal
-} from "@rhc/safety/index";
-import { classifySymptoms } from "@rhc/triage/engine";
-import type { BgPromptMessage } from "@rhc/types/index";
+} from "@rhc/safety";
+import { classifySymptoms } from "@rhc/triage";
+import type { BgPromptMessage } from "@rhc/types";
 import { enqueueBgAnalysis } from "@rhc/worker";
 import { addScheduleItem } from "../care/store";
 import { NextRequest, NextResponse } from "next/server";

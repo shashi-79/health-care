@@ -1,4 +1,4 @@
-import type { BgPromptMessage, ContextBudget } from "@rhc/types/index";
+import type { BgPromptMessage, ContextBudget } from "@rhc/types";
 
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 64_000;
 const AVG_CHARS_PER_TOKEN = 4;

@@ -1,7 +1,7 @@
-import { logEvent } from "@rhc/obs/index";
-import { getSessionMemory, patchSessionMemory } from "@rhc/rag/index";
-import { containsEmergencySignal } from "@rhc/safety/index";
-import { classifySymptoms } from "@rhc/triage/engine";
+import { logEvent } from "@rhc/obs";
+import { getSessionMemory, patchSessionMemory } from "@rhc/rag";
+import { containsEmergencySignal } from "@rhc/safety";
+import { classifySymptoms } from "@rhc/triage";
 import { NextRequest, NextResponse } from "next/server";
 
 type ConsolidateRequestBody = {

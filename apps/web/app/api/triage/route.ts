@@ -1,6 +1,6 @@
-import { classifySymptoms } from "@rhc/triage/engine";
-import { logEvent } from "@rhc/obs/index";
-import { buildEmergencyEscalationTemplate } from "@rhc/safety/index";
+import { classifySymptoms } from "@rhc/triage";
+import { logEvent } from "@rhc/obs";
+import { buildEmergencyEscalationTemplate } from "@rhc/safety";
 import { NextRequest, NextResponse } from "next/server";
 
 type TriageRequestBody = {

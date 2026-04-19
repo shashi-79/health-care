@@ -1,4 +1,4 @@
-import type { ObservationEvent, ObservationLevel } from "@rhc/types/index";
+import type { ObservationEvent, ObservationLevel } from "@rhc/types";
 type LogEventInput = {
     category: string;
     action: string;

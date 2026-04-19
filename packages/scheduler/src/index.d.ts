@@ -1,4 +1,4 @@
-import type { ScheduledJob, ScheduledJobType } from "@rhc/types/index";
+import type { ScheduledJob, ScheduledJobType } from "@rhc/types";
 type ScheduleJobInput = {
     sessionId: string;
     type: ScheduledJobType;

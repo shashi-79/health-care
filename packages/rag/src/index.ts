@@ -1,4 +1,4 @@
-import type { SessionMemory, SessionMemoryPatch } from "@rhc/types/index";
+import type { SessionMemory, SessionMemoryPatch } from "@rhc/types";
 
 const sessionMemoryStore = new Map<string, SessionMemory>();
 
@@ -50,6 +50,12 @@ export function getSessionMemory(sessionId: string): SessionMemory {
 
 	const created = buildDefaultMemory(key);
 	sessionMemoryStore.set(key, created);
+
+	if (sessionMemoryStore.size > 500) {
+		const oldestKey = sessionMemoryStore.keys().next().value;
+		if (oldestKey) sessionMemoryStore.delete(oldestKey);
+	}
+
 	return cloneMemory(created);
 }
 

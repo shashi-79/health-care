@@ -1,4 +1,4 @@
-import type { ScheduledJob, ScheduledJobType } from "@rhc/types/index";
+import type { ScheduledJob, ScheduledJobType } from "@rhc/types";
 
 type ScheduleJobInput = {
 	sessionId: string;
@@ -38,6 +38,12 @@ export function scheduleJob(input: ScheduleJobInput): ScheduledJob {
 	};
 
 	jobStore.set(id, job);
+
+	if (jobStore.size > 1000) {
+		const oldestKey = jobStore.keys().next().value;
+		if (oldestKey) jobStore.delete(oldestKey);
+	}
+
 	return cloneJob(job);
 }
 

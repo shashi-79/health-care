@@ -1,5 +1,5 @@
 import { messageQueue } from "./queue";
-import type { UiMessage } from "@rhc/types/index";
+import type { UiMessage } from "@rhc/types";
 
 type AddUiMessageInput = {
   sessionId: string;
@@ -43,6 +43,11 @@ export function addUiMessage(input: AddUiMessageInput): UiMessage {
   const messages = uiStore.get(sessionId) ?? [];
   messages.push(message);
   uiStore.set(sessionId, messages.slice(-400));
+
+  if (uiStore.size > 500) {
+    const oldestKey = uiStore.keys().next().value;
+    if (oldestKey) uiStore.delete(oldestKey);
+  }
 
   return cloneMessage(message);
 }

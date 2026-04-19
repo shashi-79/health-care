@@ -1,4 +1,4 @@
-import type { BgPromptMessage, ContextBudget } from "@rhc/types/index";
+import type { BgPromptMessage, ContextBudget } from "@rhc/types";
 export declare function getModelContextWindow(model: string): number;
 export declare function buildContextBudget(model: string, reservedResponseTokens?: number): ContextBudget;
 export declare function truncateTextToBudget(text: string, budget: ContextBudget): string;

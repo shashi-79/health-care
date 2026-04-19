@@ -1,8 +1,8 @@
-import { buildFallbackCallAgentResult, runCallAgent } from "@rhc/agents/call-agent";
-import { listUiMessages } from "@rhc/db/index";
-import { HUMAN_PERSONA_POLICY } from "@rhc/policy/persona";
-import { assertCallModel } from "@rhc/policy/routing";
-import { buildMemoryContext, getSessionMemory } from "@rhc/rag/index";
+import { buildFallbackCallAgentResult, runCallAgent } from "@rhc/agents";
+import { listUiMessages } from "@rhc/db";
+import { HUMAN_PERSONA_POLICY } from "@rhc/policy";
+import { assertCallModel } from "@rhc/policy";
+import { buildMemoryContext, getSessionMemory } from "@rhc/rag";
 import { NextRequest, NextResponse } from "next/server";
 
 const DEFAULT_CALL_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025";
