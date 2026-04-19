@@ -100,3 +100,23 @@ export function coerceStringArray(input: unknown): string[] {
 
 	return [];
 }
+
+export function parseMarkdownToText(markdown: string): string {
+	if (typeof markdown !== "string") {
+		return "";
+	}
+
+	return markdown
+		.replace(/^#+\s+/gm, "")
+		.replace(/(\*\*|__)(.*?)\1/g, "$2")
+		.replace(/(\*|_)(.*?)\1/g, "$2")
+		.replace(/```[\s\S]*?```/g, "")
+		.replace(/`([^`]+)`/g, "$1")
+		.replace(/!?\[([^\]]*)\]\([^)]+\)/g, "$1")
+		.replace(/^\s*>\s+/gm, "")
+		.replace(/<[^>]*>/g, "")
+		.replace(/^\s*[-*+]\s+/gm, "")
+		.replace(/^\s*\d+\.\s+/gm, "")
+		.replace(/\n{3,}/g, "\n\n")
+		.trim();
+}

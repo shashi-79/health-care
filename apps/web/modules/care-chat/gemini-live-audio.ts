@@ -1,5 +1,33 @@
 import { GoogleGenAI, Modality } from "@google/genai";
 
+const WORKLET_CODE = `
+class GeminiAudioProcessor extends AudioWorkletProcessor {
+  constructor() {
+    super();
+    this.bufferSize = 4096;
+    this.buffer = new Float32Array(this.bufferSize);
+    this.bufferPointer = 0;
+  }
+  
+  process(inputs, outputs, parameters) {
+    const input = inputs[0];
+    if (input && input.length > 0) {
+      const channelData = input[0];
+      for (let i = 0; i < channelData.length; i++) {
+        this.buffer[this.bufferPointer++] = channelData[i];
+        if (this.bufferPointer >= this.bufferSize) {
+          this.port.postMessage(this.buffer);
+          this.bufferPointer = 0;
+          this.buffer = new Float32Array(this.bufferSize);
+        }
+      }
+    }
+    return true;
+  }
+}
+registerProcessor('gemini-audio-processor', GeminiAudioProcessor);
+`;
+
 export class GeminiLiveAudio {
   private ai: GoogleGenAI;
   private model: string;
@@ -7,7 +35,7 @@ export class GeminiLiveAudio {
   private inAudioContext: AudioContext | null = null;
   private outAudioContext: AudioContext | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private processorNode: ScriptProcessorNode | null = null;
+  private workletNode: AudioWorkletNode | null = null;
   private nextPlayTime: number = 0;
   private isSessionActive: boolean = false;
   private isIntentionalDisconnect: boolean = false;
@@ -35,10 +63,17 @@ export class GeminiLiveAudio {
     }
 
     this.sourceNode = this.inAudioContext.createMediaStreamSource(stream);
-    this.processorNode = this.inAudioContext.createScriptProcessor(4096, 1, 1);
+    
+    // Inject and instantiate the Web Audio Worklet
+    const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+    const url = URL.createObjectURL(blob);
+    await this.inAudioContext.audioWorklet.addModule(url);
+    URL.revokeObjectURL(url);
+    
+    this.workletNode = new AudioWorkletNode(this.inAudioContext, 'gemini-audio-processor');
 
-    this.sourceNode.connect(this.processorNode);
-    this.processorNode.connect(this.inAudioContext.destination);
+    this.sourceNode.connect(this.workletNode);
+    this.workletNode.connect(this.inAudioContext.destination);
 
     this.sessionPromise = this.ai.live.connect({
       model: this.model,
@@ -88,10 +123,10 @@ export class GeminiLiveAudio {
       }
     });
 
-    this.processorNode.onaudioprocess = (e) => {
+    this.workletNode.port.onmessage = (e) => {
       if (!this.isSessionActive || this.isIntentionalDisconnect || !this.sessionPromise) return;
 
-      const inputData = e.inputBuffer.getChannelData(0);
+      const inputData = e.data;
       const pcm16 = new Int16Array(inputData.length);
       for (let i = 0; i < inputData.length; i++) {
         const s = Math.max(-1, Math.min(1, inputData[i]));
@@ -175,10 +210,10 @@ export class GeminiLiveAudio {
     this.isIntentionalDisconnect = true;
     this.isSessionActive = false;
     
-    if (this.processorNode) {
-      this.processorNode.disconnect();
-      this.processorNode.onaudioprocess = null;
-      this.processorNode = null;
+    if (this.workletNode) {
+      this.workletNode.disconnect();
+      this.workletNode.port.onmessage = null;
+      this.workletNode = null;
     }
     if (this.sourceNode) {
       this.sourceNode.disconnect();

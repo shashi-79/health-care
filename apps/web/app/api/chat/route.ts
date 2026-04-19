@@ -12,6 +12,7 @@ import {
 import { classifySymptoms } from "@rhc/triage/engine";
 import type { BgPromptMessage } from "@rhc/types/index";
 import { enqueueBgAnalysis } from "@rhc/worker";
+import { addScheduleItem } from "../care/store";
 import { NextRequest, NextResponse } from "next/server";
 
 const DEFAULT_CHAT_MODEL = "openai/gpt-4o-mini";
@@ -282,6 +283,9 @@ export async function POST(request: NextRequest) {
       bgEscalationTemplate ?? buildEmergencyEscalationTemplate(symptoms.length > 0 ? symptoms : triageInput);
     safetyInterventions.push("emergency_escalation_template");
     riskFlags.push("emergency_escalation_template");
+  } else if (shouldRunBgAnalysis) {
+    assistantText = medicalReference || "Analyzing your medical profile and cross-referencing FDA databases. Please wait...";
+    usedChatAgent = false;
   } else {
     try {
       const chatResult = await runChatAgent({
@@ -301,6 +305,29 @@ export async function POST(request: NextRequest) {
 
       assistantText = chatResult.responseText;
       usedChatAgent = true;
+
+      if (chatResult.scheduledCall) {
+        let scheduleDate = new Date().toISOString();
+        if (chatResult.scheduledCall.time.toLowerCase().includes("tomorrow")) {
+          const d = new Date();
+          d.setDate(d.getDate() + 1);
+          scheduleDate = d.toISOString();
+        }
+        
+        addScheduleItem(sessionId, {
+          scheduleType: "Call Time",
+          title: chatResult.scheduledCall.title || "Follow-up Callback",
+          time: chatResult.scheduledCall.time,
+          duration: "15 min",
+          notes: "Scheduled autonomously by AI",
+          dateNumber: new Date(scheduleDate).getDate().toString(),
+          dayLabel: new Date(scheduleDate).toLocaleDateString('en-US', { weekday: 'short' }),
+          tone: "warning",
+          scheduleDate: scheduleDate
+        });
+        
+        bgAnalysis.actions.push("schedule_call_created");
+      }
     } catch {
       assistantText = buildFallbackAssistantText({
         emergencySignal,

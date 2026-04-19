@@ -1,4 +1,5 @@
 import { fetchDrugData } from "@rhc/medical/fda";
+import { getOpenRouterClient } from "@rhc/ai/openrouter-client";
 import { assertBgModel, assertToolsAllowedOnlyForBg } from "@rhc/policy/routing";
 import { buildEmergencyEscalationTemplate, containsEmergencySignal } from "@rhc/safety/index";
 import { buildContextBudget, fitMessagesToBudget, truncateTextToBudget } from "@rhc/tools/index";
@@ -303,7 +304,46 @@ export async function runBgAgent(input: BgAgentInput): Promise<BgAgentResult> {
     safetyInterventions.push("emergency_escalation_template");
     actions.push("safety_emergency_escalation_template");
   } else {
-    const drugQuery = extractDrugQuery(input.query ?? promptPreview);
+    let drugQuery = extractDrugQuery(input.query ?? promptPreview);
+    
+    if (!drugQuery && input.enableTools) {
+      const openrouter = getOpenRouterClient();
+      try {
+        const completion: any = await openrouter.chat.completions.create({
+          model: input.model,
+          messages: [
+            { role: "system", content: "You are a clinical assistant tool orchestrator. If the user context requires information about a medicine, drug, or prescription, call the 'search_fda' tool with the exact name. Otherwise output 'none'." },
+            { role: "user", content: input.query ?? promptPreview }
+          ],
+          tools: [{
+            type: "function",
+            function: {
+              name: "search_fda",
+              description: "Search FDA database using a specific drug or medicine name.",
+              parameters: {
+                type: "object",
+                properties: { query: { type: "string", description: "The specific drug name (e.g. Tylenol, Aspirin, Ibuprofen)" } },
+                required: ["query"]
+              }
+            }
+          }],
+          tool_choice: "auto",
+          temperature: 0,
+          max_tokens: 100
+        } as any);
+
+        const tc = completion.choices?.[0]?.message?.tool_calls?.find((c: any) => c.function.name === "search_fda");
+        if (tc && tc.function.arguments) {
+          try {
+            drugQuery = JSON.parse(tc.function.arguments).query;
+            actions.push("ai_tool_fda_query_generated");
+          } catch (e) {}
+        }
+      } catch (e) {
+        // Fallback to undefined if LLM fails
+      }
+    }
+
     const lookup = await lookupDrugHints(drugQuery, patientAge, patientWeightKg);
     drugHints = lookup.hints;
     dosingInsights = lookup.dosingInsights;

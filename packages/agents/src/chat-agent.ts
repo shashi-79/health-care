@@ -26,6 +26,10 @@ export type ChatAgentResult = {
   model: string;
   responseText: string;
   usedPromptChars: number;
+  scheduledCall?: {
+    time: string;
+    title?: string;
+  };
 };
 
 export type ChatTransferDecisionInput = {
@@ -224,14 +228,49 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
       model: input.model,
       temperature: 0.25,
       max_tokens: 260,
-      messages
+      messages,
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "schedule_call",
+            description: "Schedule an autonomous voice call callback with the patient. Use this if the patient requests a call, callback, or phone contact at a specific time or immediately.",
+            parameters: {
+              type: "object",
+              properties: {
+                time: { type: "string", description: "Time exactly as requested, e.g. 'now', '5 minutes', '2:00 PM', 'tomorrow morning'" },
+                title: { type: "string", description: "Brief reason or title for the call" }
+              },
+              required: ["time"]
+            }
+          }
+        }
+      ]
     } as any),
     timeoutMs,
     `Chat agent timed out after ${timeoutMs}ms`
   );
 
-  const responseText = extractResponseText(completion.choices?.[0]?.message?.content);
-  if (!responseText) {
+  const responseMessage = completion.choices?.[0]?.message;
+  let responseText = extractResponseText(responseMessage?.content);
+  
+  let scheduledCall;
+  if (responseMessage?.tool_calls?.length > 0) {
+    const call = responseMessage.tool_calls.find((tc: any) => tc.function.name === "schedule_call");
+    if (call && call.function.arguments) {
+      try {
+        const args = JSON.parse(call.function.arguments);
+        scheduledCall = {
+          time: args.time || "now",
+          title: args.title || "Follow-up Callback"
+        };
+      } catch (e) {}
+    }
+  }
+
+  if (!responseText && scheduledCall) {
+    responseText = `I have scheduled a call for ${scheduledCall.time}.`;
+  } else if (!responseText) {
     throw new Error("Chat agent returned an empty response.");
   }
 
@@ -239,7 +278,8 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     sessionId: input.sessionId,
     model: input.model,
     responseText,
-    usedPromptChars: promptChars
+    usedPromptChars: promptChars,
+    scheduledCall
   };
 }
 
