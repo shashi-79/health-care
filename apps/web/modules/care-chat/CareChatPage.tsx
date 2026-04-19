@@ -9,7 +9,6 @@ import { HistoryView } from "./components/HistoryView";
 import { MainChatView } from "./components/MainChatView";
 import { MediaView } from "./components/MediaView";
 import { ProfileView } from "./components/ProfileView";
-import { handleActionKeyDown } from "./components/viewTypes";
 import { useCareChatController } from "./useCareChatController";
 
 export default function CareChatPage() {
@@ -30,15 +29,6 @@ export default function CareChatPage() {
       <div id="toast" className={`toast ${vm.toastVisible ? "show" : ""}`}>
         {vm.toastText}
       </div>
-
-      <div
-        id="backdrop"
-        className={`backdrop ${vm.chatMenuOpen || vm.attachSheetOpen ? "" : "hidden"}`}
-        onClick={vm.closeOverlays}
-        onKeyDown={(event) => handleActionKeyDown(event, vm.closeOverlays)}
-        role="button"
-        tabIndex={0}
-      />
     </div>
   );
 }

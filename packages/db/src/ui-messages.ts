@@ -1,3 +1,4 @@
+import { messageQueue } from "./queue";
 import type { UiMessage } from "@rhc/types/index";
 
 type AddUiMessageInput = {
@@ -36,6 +37,8 @@ export function addUiMessage(input: AddUiMessageInput): UiMessage {
     content,
     createdAt: input.createdAt ?? nowIso()
   };
+
+  messageQueue.add("message", message);
 
   const messages = uiStore.get(sessionId) ?? [];
   messages.push(message);

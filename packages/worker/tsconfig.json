@@ -1,0 +1,7 @@
+{
+  "extends": "../../tsconfig.base.jsonc",
+  "compilerOptions": {
+    "outDir": "./dist"
+  },
+  "include": ["src"]
+}

@@ -2,7 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import { ArrowLeft, FileText, Link2 } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
+import { handleImageError } from "./viewTypes";
 
 export function MediaView({ vm }: CareChatViewProps) {
   return (
@@ -10,7 +12,7 @@ export function MediaView({ vm }: CareChatViewProps) {
       <header className="history-header shadow-sm dark-header">
         <div className="header-left">
           <button className="icon-btn text-white" onClick={vm.closeMedia} type="button">
-            ←
+            <ArrowLeft />
           </button>
           <h2>{vm.contactProfile.name}</h2>
         </div>
@@ -43,8 +45,8 @@ export function MediaView({ vm }: CareChatViewProps) {
       <div className="media-panel-wrap">
         {vm.mediaTab === "media" ? (
           <div className="media-grid">
-            {vm.mediaImages.map((src) => (
-              <img key={src} src={src} alt="Media" />
+            {vm.mediaImages.map((src, index) => (
+              <img key={src} src={src} alt={`Shared media ${index + 1}`} onError={handleImageError} />
             ))}
             {vm.mediaImages.length === 0 ? <div className="media-video-placeholder">No media</div> : null}
           </div>
@@ -55,7 +57,9 @@ export function MediaView({ vm }: CareChatViewProps) {
             {vm.mediaDocs.length === 0 ? <p className="table-intro">No documents shared yet.</p> : null}
             {vm.mediaDocs.map((doc) => (
               <div key={doc.id} className="media-list-item">
-                <span className="doc-chip">📄</span>
+                <span className="doc-chip">
+                  <FileText />
+                </span>
                 <div>
                   <strong>{doc.title}</strong>
                   <small>{doc.meta}</small>
@@ -70,7 +74,9 @@ export function MediaView({ vm }: CareChatViewProps) {
             {vm.mediaLinks.length === 0 ? <p className="table-intro">No links available.</p> : null}
             {vm.mediaLinks.map((link) => (
               <div key={link.id} className="media-list-item">
-                <span className="link-chip">🔗</span>
+                <span className="link-chip">
+                  <Link2 />
+                </span>
                 <div>
                   <strong>{link.title}</strong>
                   <small>{link.url}</small>

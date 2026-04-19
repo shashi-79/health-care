@@ -7,7 +7,6 @@
       "es2022"
     ],
     "strict": true,
-    "incremental": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
     "module": "ESNext",
@@ -61,6 +60,9 @@
       ],
       "@rhc/obs/*": [
         "./packages/obs/src/*"
+      ],
+      "@rhc/worker/*": [
+        "./packages/worker/src/*"
       ]
     }
   }

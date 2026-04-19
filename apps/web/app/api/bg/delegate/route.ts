@@ -10,7 +10,21 @@ const DEFAULT_BG_MODEL = "anthropic/claude-haiku-4.5";
 type DelegateRequestBody = {
   sessionId?: string;
   query?: string;
+  patientAge?: number;
+  patientWeightKg?: number;
 };
+
+function normalizeNumeric(value: unknown, min: number, max: number) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+
+  if (value < min || value > max) {
+    return undefined;
+  }
+
+  return value;
+}
 
 function normalizeSessionId(value: unknown) {
   if (typeof value !== "string") return "default";
@@ -50,6 +64,8 @@ export async function POST(request: NextRequest) {
 
   const model = process.env.BG_MODEL ?? DEFAULT_BG_MODEL;
   const memory = getSessionMemory(sessionId);
+  const patientAge = normalizeNumeric(body.patientAge, 1, 120) ?? memory.rootDetails?.age;
+  const patientWeightKg = normalizeNumeric(body.patientWeightKg, 1, 350) ?? memory.rootDetails?.weightKg;
   const uiMessages = listUiMessages(sessionId, 20);
 
   const messages: BgPromptMessage[] = [
@@ -66,6 +82,8 @@ export async function POST(request: NextRequest) {
     model,
     messages,
     query,
+    patientAge,
+    patientWeightKg,
     enableTools: true
   });
 
@@ -76,9 +94,36 @@ export async function POST(request: NextRequest) {
     details: {
       model,
       actionCount: result.actions.length,
-      maxContextTokens: result.budget.maxContextTokens
+      maxContextTokens: result.budget.maxContextTokens,
+      routeDecision: result.routeDecision,
+      fdaLookupStatus: result.lookupStatus,
+      dosingInsightCount: result.dosingInsights.length
     }
   });
+
+  logEvent({
+    category: "triage",
+    action: "route_decision",
+    level: result.routeDecision === "emergency_escalation" ? "warn" : "info",
+    sessionId,
+    details: {
+      decision: result.routeDecision,
+      fdaLookupStatus: result.lookupStatus
+    }
+  });
+
+  if (result.safetyInterventions.length > 0) {
+    logEvent({
+      category: "safety",
+      action: "bg_safety_intervention",
+      level: "warn",
+      sessionId,
+      details: {
+        interventions: result.safetyInterventions,
+        decision: result.routeDecision
+      }
+    });
+  }
 
   return NextResponse.json({
     ok: true,

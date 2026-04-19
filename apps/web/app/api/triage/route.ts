@@ -1,10 +1,19 @@
 import { classifySymptoms } from "@rhc/triage/engine";
+import { logEvent } from "@rhc/obs/index";
+import { buildEmergencyEscalationTemplate } from "@rhc/safety/index";
 import { NextRequest, NextResponse } from "next/server";
 
 type TriageRequestBody = {
+  sessionId?: string;
   symptoms?: string[] | string;
   text?: string;
 };
+
+function normalizeSessionId(value: unknown) {
+  if (typeof value !== "string") return "default";
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : "default";
+}
 
 function normalizeSymptoms(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -40,6 +49,7 @@ export async function POST(request: NextRequest) {
 
   const symptoms = normalizeSymptoms(body.symptoms);
   const text = typeof body.text === "string" ? body.text.trim() : "";
+  const sessionId = normalizeSessionId(body.sessionId);
   const triageInput = symptoms.length > 0 ? symptoms : text ? [text] : [];
 
   if (triageInput.length === 0) {
@@ -56,14 +66,38 @@ export async function POST(request: NextRequest) {
   const triage = classifySymptoms(triageInput);
   const recommendation =
     triage.level === "emergency"
-      ? "Seek emergency in-person care immediately."
+      ? buildEmergencyEscalationTemplate(symptoms)
       : triage.level === "moderate"
         ? "Arrange a clinician consultation soon and monitor symptoms closely."
         : "Continue home monitoring and report if symptoms worsen.";
 
+  logEvent({
+    category: "triage",
+    action: "route_decision",
+    level: triage.level === "emergency" ? "warn" : triage.level === "moderate" ? "warn" : "info",
+    sessionId,
+    details: {
+      triage: triage.level,
+      decision: triage.level === "emergency" ? "emergency_escalation" : "non_emergency"
+    }
+  });
+
+  if (triage.level === "emergency") {
+    logEvent({
+      category: "safety",
+      action: "emergency_escalation_template_sent",
+      level: "warn",
+      sessionId,
+      details: {
+        source: "/api/triage"
+      }
+    });
+  }
+
   return NextResponse.json({
     ok: true,
     route: "/api/triage",
+    sessionId,
     triage,
     recommendation
   });

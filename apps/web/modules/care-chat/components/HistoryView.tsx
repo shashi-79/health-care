@@ -2,9 +2,20 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { getHistoryIcon } from "../constants";
+import {
+  ArrowLeft,
+  Link2,
+  MoreVertical,
+  Phone,
+  PhoneCall,
+  PhoneIncoming,
+  PhoneMissed,
+  PhoneOutgoing,
+  Search,
+  Trash2
+} from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
-import { handleActionKeyDown } from "./viewTypes";
+import { handleActionKeyDown, handleImageError } from "./viewTypes";
 
 export function HistoryView({ vm }: CareChatViewProps) {
   return (
@@ -12,22 +23,30 @@ export function HistoryView({ vm }: CareChatViewProps) {
       <header className="history-header shadow-sm dark-header">
         <div className="header-left">
           <button className="icon-btn text-white" onClick={vm.closeHistory} type="button">
-            ←
+            <ArrowLeft />
           </button>
           <h2>Calls</h2>
         </div>
         <div className="header-actions">
           <button className="icon-btn text-white" type="button">
-            🔎
+            <Search />
           </button>
           <button className="icon-btn text-white" type="button">
-            ⋮
+            <MoreVertical />
           </button>
         </div>
       </header>
 
-      <div className="create-call-link">
-        <div className="link-badge">🔗</div>
+      <div
+        className="create-call-link"
+        onClick={vm.simulateIncomingCall}
+        onKeyDown={(event) => handleActionKeyDown(event, vm.simulateIncomingCall)}
+        role="button"
+        tabIndex={0}
+      >
+        <div className="link-badge">
+          <Link2 />
+        </div>
         <div>
           <h3>Create call link</h3>
           <span>Share a link for your call with {vm.contactProfile.name}</span>
@@ -50,11 +69,15 @@ export function HistoryView({ vm }: CareChatViewProps) {
               tabIndex={0}
             >
               <div className="checkbox" />
-              <img src={item.avatar} className="avatar" alt={item.name} />
+              <img src={item.avatar} className="avatar" alt={`Call with ${item.name}`} onError={handleImageError} />
               <div className="history-info">
                 <h3 className={item.type === "missed" ? "text-red" : ""}>{item.name}</h3>
                 <div className="history-meta">
-                  <span className={`call-${item.type}`}>{getHistoryIcon(item.type)}</span>
+                  <span className={`call-${item.type}`}>
+                    {item.type === "in" ? <PhoneIncoming size={14} /> : null}
+                    {item.type === "out" ? <PhoneOutgoing size={14} /> : null}
+                    {item.type === "missed" ? <PhoneMissed size={14} /> : null}
+                  </span>
                   <span>{item.time}</span>
                 </div>
               </div>
@@ -67,7 +90,7 @@ export function HistoryView({ vm }: CareChatViewProps) {
                   }}
                   type="button"
                 >
-                  📞
+                  <Phone size={16} />
                 </button>
                 <button
                   className="icon-btn"
@@ -77,7 +100,7 @@ export function HistoryView({ vm }: CareChatViewProps) {
                   }}
                   type="button"
                 >
-                  🗑
+                  <Trash2 size={16} />
                 </button>
               </div>
             </div>
@@ -97,7 +120,7 @@ export function HistoryView({ vm }: CareChatViewProps) {
       </div>
 
       <button className="fab-btn call-fab" onClick={vm.startCall} type="button">
-        📞
+        <PhoneCall />
       </button>
     </div>
   );

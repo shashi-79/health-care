@@ -1,0 +1,23 @@
+{
+  "name": "@rhc/worker",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+    "clean": "rm -rf .turbo dist"
+  },
+  "dependencies": {
+    "@rhc/agents": "*",
+    "@rhc/db": "*",
+    "@rhc/obs": "*",
+    "@rhc/rag": "*",
+    "bullmq": "^5.7.8"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5"
+  }
+}

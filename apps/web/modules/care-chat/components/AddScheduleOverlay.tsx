@@ -1,5 +1,6 @@
 "use client";
 
+import { X } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
 import { handleActionKeyDown } from "./viewTypes";
 
@@ -18,7 +19,7 @@ export function AddScheduleOverlay({ vm }: CareChatViewProps) {
           <div className="popup-header-inner">
             <h2>New Schedule</h2>
             <button className="icon-btn" onClick={() => vm.setAddScheduleOpen(false)} type="button">
-              ✕
+              <X />
             </button>
           </div>
         </header>

@@ -1,9 +1,12 @@
+import { buildFallbackCallAgentResult, runCallAgent } from "@rhc/agents/call-agent";
+import { listUiMessages } from "@rhc/db/index";
 import { HUMAN_PERSONA_POLICY } from "@rhc/policy/persona";
 import { assertCallModel } from "@rhc/policy/routing";
 import { buildMemoryContext, getSessionMemory } from "@rhc/rag/index";
 import { NextRequest, NextResponse } from "next/server";
 
 const DEFAULT_CALL_MODEL = "gemini-live-2.5-flash-preview";
+const DEFAULT_CALL_AGENT_MODEL = "anthropic/claude-haiku-4.5";
 
 type CallInitRequestBody = {
   sessionId?: string;
@@ -25,22 +28,55 @@ export async function POST(request: NextRequest) {
   }
 
   const sessionId = normalizeSessionId(body.sessionId);
-  const model = process.env.NEXT_PUBLIC_CALL_MODEL ?? DEFAULT_CALL_MODEL;
-  assertCallModel(model);
+  const callModel = process.env.NEXT_PUBLIC_CALL_MODEL ?? DEFAULT_CALL_MODEL;
+  const callAgentModel = process.env.CALL_AGENT_MODEL ?? process.env.BG_MODEL ?? DEFAULT_CALL_AGENT_MODEL;
+  assertCallModel(callModel);
 
   const memory = getSessionMemory(sessionId);
   const memoryContext = buildMemoryContext(memory, 1_200);
+  const recentTranscript = listUiMessages(sessionId, 12)
+    .map((message) => `[${message.role}] ${message.content}`)
+    .join("\n")
+    .slice(-1_500);
+  const language = memory.rootDetails?.primaryLanguage ?? "en-IN";
+
+  let usedCallAgent = false;
+  const callAgent = await (async () => {
+    try {
+      const result = await runCallAgent({
+        sessionId,
+        model: callAgentModel,
+        language,
+        persona: HUMAN_PERSONA_POLICY,
+        memoryContext,
+        recentTranscript
+      });
+      usedCallAgent = true;
+      return result;
+    } catch {
+      return buildFallbackCallAgentResult({
+        sessionId,
+        model: callAgentModel,
+        language,
+        persona: HUMAN_PERSONA_POLICY,
+        memoryContext,
+        recentTranscript
+      });
+    }
+  })();
 
   return NextResponse.json({
     ok: true,
     route: "/api/call/init",
     sessionId,
+    usedCallAgent,
     call: {
       provider: "gemini-live",
-      model,
+      model: callModel,
       persona: HUMAN_PERSONA_POLICY,
-      language: memory.rootDetails?.primaryLanguage ?? "en-IN",
-      memoryContext
+      language,
+      memoryContext,
+      agent: callAgent
     }
   });
 }

@@ -2,7 +2,9 @@
 
 /* eslint-disable @next/next/no-img-element */
 
+import { ArrowLeft, CalendarDays, ChevronRight, HeartPulse, MoreVertical, Ruler, UserRound } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
+import { handleImageError } from "./viewTypes";
 
 export function ProfileView({ vm }: CareChatViewProps) {
   return (
@@ -10,34 +12,37 @@ export function ProfileView({ vm }: CareChatViewProps) {
       <header className="history-header shadow-sm light-header">
         <div className="header-left">
           <button className="icon-btn" onClick={vm.closeProfile} type="button">
-            ←
+            <ArrowLeft />
           </button>
           <h2>Contact info</h2>
         </div>
         <div className="header-actions">
           <button className="icon-btn" type="button">
-            ⋮
+            <MoreVertical />
           </button>
         </div>
       </header>
 
       <div className="profile-hero">
-        <img src={vm.contactProfile.avatarUrl} alt={vm.contactProfile.name} />
+        <img src={vm.contactProfile.avatarUrl} alt={`${vm.contactProfile.name} profile avatar`} onError={handleImageError} />
         <h2>{vm.contactProfile.name}</h2>
-        <span>{vm.contactProfile.phone}</span>
       </div>
 
       <section className="profile-card">
         <h3>Patient Details</h3>
         <div className="detail-row">
-          <span>👤</span>
+          <span>
+            <UserRound />
+          </span>
           <div>
             <small>Name</small>
             <strong>{vm.contactProfile.name}</strong>
           </div>
         </div>
         <div className="detail-row">
-          <span>📅</span>
+          <span>
+            <CalendarDays />
+          </span>
           <div>
             <small>DOB & Age</small>
             <strong>
@@ -46,7 +51,9 @@ export function ProfileView({ vm }: CareChatViewProps) {
           </div>
         </div>
         <div className="detail-row">
-          <span>🩺</span>
+          <span>
+            <Ruler />
+          </span>
           <div className="detail-grid-two">
             <div>
               <small>Weight</small>
@@ -62,7 +69,9 @@ export function ProfileView({ vm }: CareChatViewProps) {
 
       <section className="profile-card">
         <div className="detail-row medical-history">
-          <span>❤️</span>
+          <span>
+            <HeartPulse />
+          </span>
           <div>
             <small>Medical History</small>
             <p>{vm.contactProfile.medicalHistory}</p>
@@ -80,7 +89,9 @@ export function ProfileView({ vm }: CareChatViewProps) {
               items available
             </small>
           </div>
-          <span>›</span>
+          <span>
+            <ChevronRight />
+          </span>
         </button>
       </section>
     </div>

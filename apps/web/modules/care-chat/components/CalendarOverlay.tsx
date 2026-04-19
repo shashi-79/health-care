@@ -1,5 +1,6 @@
 "use client";
 
+import { Bell, Clock3, Pill, Plus, X } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
 import { handleActionKeyDown } from "./viewTypes";
 
@@ -18,7 +19,7 @@ export function CalendarOverlay({ vm }: CareChatViewProps) {
           <div className="popup-header-inner">
             <h2>Schedule</h2>
             <button className="icon-btn" onClick={() => vm.setCalendarOpen(false)} type="button">
-              ✕
+              <X />
             </button>
           </div>
         </header>
@@ -42,7 +43,11 @@ export function CalendarOverlay({ vm }: CareChatViewProps) {
                 <div className="agenda-events">
                   {group.items.map((item) => (
                     <div key={item.id} className={`event-item event-${item.tone}`}>
-                      <span>{item.scheduleType.includes("Medicine") ? "💊" : item.scheduleType.includes("Call") ? "🕒" : "🔔"}</span>
+                      <span>
+                        {item.scheduleType.includes("Medicine") ? <Pill size={16} /> : null}
+                        {item.scheduleType.includes("Call") ? <Clock3 size={16} /> : null}
+                        {!item.scheduleType.includes("Medicine") && !item.scheduleType.includes("Call") ? <Bell size={16} /> : null}
+                      </span>
                       <div>
                         <h4>{item.title}</h4>
                         <small>
@@ -66,7 +71,7 @@ export function CalendarOverlay({ vm }: CareChatViewProps) {
         </div>
 
         <button className="fab-btn" onClick={() => vm.setAddScheduleOpen(true)} type="button">
-          ＋
+          <Plus />
         </button>
       </div>
     </div>

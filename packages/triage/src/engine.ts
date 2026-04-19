@@ -7,8 +7,26 @@ export type TriageResult = {
 
 export function classifySymptoms(symptoms: string[]): TriageResult {
   const s = symptoms.map((x) => x.toLowerCase());
-  const emergencySignals = ["chest pain", "shortness of breath", "unconscious", "severe bleeding"];
-  const moderateSignals = ["fever 3 days", "persistent cough", "dehydration"];
+  const emergencySignals = [
+    "chest pain",
+    "shortness of breath",
+    "unconscious",
+    "severe bleeding",
+    "seizure",
+    "stroke",
+    "not breathing",
+    "suicidal",
+    "fainting"
+  ];
+  const moderateSignals = [
+    "fever 3 days",
+    "persistent cough",
+    "dehydration",
+    "vomiting",
+    "dizziness",
+    "headache",
+    "rash"
+  ];
 
   if (emergencySignals.some((sig) => s.some((v) => v.includes(sig)))) {
     return { level: "emergency", reasons: ["Emergency symptom pattern detected."] };

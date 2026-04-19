@@ -1,7 +1,7 @@
 import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { CAPTURE_PREVIEW_URL, formatCallDuration } from "./constants";
 import { buildDefaultDocumentPreview, buildSeededBrowserState } from "./data/seedData";
-import { loadCareChatBrowserState, saveCareChatBrowserState } from "./localSqliteStore";
+import { loadCareChatBrowserState, saveCareChatBrowserState } from "./localBrowserStore";
 import type {
   ActiveView,
   ChatMessage,
@@ -46,7 +46,62 @@ type ApiChatResponse = {
     role: "assistant";
     content: string;
   };
+  bgAnalysis?: {
+    executed?: boolean;
+    actions?: string[];
+    drugHints?: string[];
+    shouldStop?: boolean;
+  };
 };
+
+type ApiHistoryResponse = {
+  ok: boolean;
+  history?: HistoryItem[];
+};
+
+type ApiScheduleResponse = {
+  ok: boolean;
+  schedules?: ScheduleItem[];
+};
+
+type ApiCallState = {
+  sessionId: string;
+  status: "idle" | "ringing" | "active" | "ended" | "missed";
+  direction: "incoming" | "outgoing" | null;
+  contactName: string;
+  updatedAt: string;
+  startedAtMs: number | null;
+  endedAtMs: number | null;
+  ringToken: number;
+};
+
+type ApiCallStateResponse = {
+  ok: boolean;
+  call?: ApiCallState;
+};
+
+type ApiCallAgentPayload = {
+  openingScript?: string;
+  firstQuestions?: string[];
+  safetyNotes?: string[];
+};
+
+type ApiCallInitResponse = {
+  ok: boolean;
+  usedCallAgent?: boolean;
+  call?: {
+    provider?: string;
+    model?: string;
+    persona?: string;
+    language?: string;
+    memoryContext?: string;
+    agent?: ApiCallAgentPayload;
+  };
+};
+
+type ApiCallAction = "start_outgoing" | "simulate_incoming" | "accept" | "end" | "clear";
+
+type MicPermissionState = "unknown" | "granted" | "denied" | "unsupported";
 
 const DEFAULT_SCHEDULE_FORM: ScheduleFormState = {
   scheduleType: "Medicine Time",
@@ -109,6 +164,22 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T | null
   }
 }
 
+async function ensureNotificationPermission() {
+  if (typeof window === "undefined" || !("Notification" in window)) {
+    return "unsupported";
+  }
+
+  if (window.Notification.permission === "default") {
+    try {
+      return await window.Notification.requestPermission();
+    } catch {
+      return window.Notification.permission;
+    }
+  }
+
+  return window.Notification.permission;
+}
+
 export function useCareChatController() {
   const [activeView, setActiveView] = useState<ActiveView>("chat");
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
@@ -119,6 +190,7 @@ export function useCareChatController() {
   const [mediaTab, setMediaTab] = useState<MediaTab>("media");
 
   const [sessionId] = useState(resolveInitialSessionId);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [messageText, setMessageText] = useState("");
   const [cameraCaption, setCameraCaption] = useState("");
@@ -144,6 +216,10 @@ export function useCareChatController() {
   const [callStatus, setCallStatus] = useState("Ringing...");
   const [callDurationSeconds, setCallDurationSeconds] = useState(0);
   const [isRinging, setIsRinging] = useState(false);
+  const [callDirection, setCallDirection] = useState<"incoming" | "outgoing" | null>(null);
+  const [isMicMuted, setIsMicMuted] = useState(false);
+  const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
+  const [micPermissionState, setMicPermissionState] = useState<MicPermissionState>("unknown");
 
   const [toastText, setToastText] = useState("Action completed");
   const [toastVisible, setToastVisible] = useState(false);
@@ -156,11 +232,17 @@ export function useCareChatController() {
   const callTimerRef = useRef<number | null>(null);
   const callAnswerRef = useRef<number | null>(null);
   const localStateLoadedRef = useRef(false);
+  const lastIncomingRingTokenRef = useRef<number | null>(null);
+  const lastMissedRingTokenRef = useRef<number | null>(null);
+  const isRingingRef = useRef(isRinging);
+  const micPermissionStateRef = useRef<MicPermissionState>("unknown");
+  const localMicStreamRef = useRef<MediaStream | null>(null);
+  const syncInFlightRef = useRef(false);
 
   const isChatView = activeView === "chat";
 
   const voiceSendIcon = useMemo(() => {
-    return messageText.trim().length > 0 ? "➤" : "🎤";
+    return messageText.trim().length > 0 ? ">" : "M";
   }, [messageText]);
 
   const groupedSchedules = useMemo<GroupedSchedules[]>(() => {
@@ -266,6 +348,273 @@ export function useCareChatController() {
     setChatMessages((prev) => [...prev, message]);
   }
 
+  function notifyIncomingCall(contactName: string) {
+    void (async () => {
+      const permission = await ensureNotificationPermission();
+      if (permission !== "granted" || typeof window === "undefined") {
+        return;
+      }
+
+      const notification = new window.Notification("Incoming care call", {
+        body: `${contactName} is calling you.`
+      });
+
+      notification.onclick = () => {
+        window.focus();
+        switchView("calling");
+      };
+    })();
+  }
+
+  function stopMicAudioSession() {
+    const stream = localMicStreamRef.current;
+    if (!stream) {
+      return;
+    }
+
+    for (const track of stream.getTracks()) {
+      track.stop();
+    }
+
+    localMicStreamRef.current = null;
+  }
+
+  function applyMicMutedState(nextMuted: boolean) {
+    const stream = localMicStreamRef.current;
+    if (!stream) {
+      return;
+    }
+
+    for (const track of stream.getAudioTracks()) {
+      track.enabled = !nextMuted;
+    }
+  }
+
+  async function ensureCallAudioSession(options?: { forceRetry?: boolean }) {
+    const forceRetry = options?.forceRetry ?? false;
+
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    if (localMicStreamRef.current) {
+      return true;
+    }
+
+    if (!forceRetry && (micPermissionStateRef.current === "denied" || micPermissionStateRef.current === "unsupported")) {
+      return false;
+    }
+
+    if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
+      setMicPermissionState("unsupported");
+      micPermissionStateRef.current = "unsupported";
+      showToast("Microphone is not supported in this browser");
+      return false;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        },
+        video: false
+      });
+
+      localMicStreamRef.current = stream;
+      setMicPermissionState("granted");
+      micPermissionStateRef.current = "granted";
+      applyMicMutedState(isMicMuted);
+      showToast("Microphone connected");
+      return true;
+    } catch {
+      setMicPermissionState("denied");
+      micPermissionStateRef.current = "denied";
+      showToast("Microphone permission denied");
+      return false;
+    }
+  }
+
+  function toggleMicrophone() {
+    void (async () => {
+      if (!localMicStreamRef.current) {
+        const ready = await ensureCallAudioSession({ forceRetry: true });
+        if (!ready) {
+          return;
+        }
+      }
+
+      const nextMuted = !isMicMuted;
+      setIsMicMuted(nextMuted);
+      applyMicMutedState(nextMuted);
+      showToast(nextMuted ? "Microphone muted" : "Microphone unmuted");
+    })();
+  }
+
+  function toggleSpeaker() {
+    const nextEnabled = !isSpeakerEnabled;
+    setIsSpeakerEnabled(nextEnabled);
+    showToast(nextEnabled ? "Speaker on" : "Speaker off");
+  }
+
+  function applyServerCallState(call: ApiCallState) {
+    if (call.status === "ringing") {
+      setCallDirection(call.direction);
+      setIsRinging(true);
+      isRingingRef.current = true;
+      setIsMicMuted(false);
+      setIsSpeakerEnabled(true);
+      setMicPermissionState("unknown");
+      micPermissionStateRef.current = "unknown";
+      setCallDurationSeconds(0);
+      setCallStatus(call.direction === "incoming" ? "Incoming..." : "Calling...");
+
+      if (call.direction === "incoming" && lastIncomingRingTokenRef.current !== call.ringToken) {
+        lastIncomingRingTokenRef.current = call.ringToken;
+        showToast(`Incoming call from ${call.contactName}`);
+        notifyIncomingCall(call.contactName);
+        switchView("calling");
+      }
+
+      return;
+    }
+
+    if (call.status === "active") {
+      setCallDirection(call.direction);
+      setIsRinging(false);
+      isRingingRef.current = false;
+
+      void ensureCallAudioSession();
+
+      if (!callTimerRef.current) {
+        const elapsedSeconds = call.startedAtMs ? Math.max(0, Math.floor((Date.now() - call.startedAtMs) / 1000)) : 0;
+        setCallTimerRefAndStatus(elapsedSeconds);
+      }
+
+      return;
+    }
+
+    if (callTimerRef.current) {
+      window.clearInterval(callTimerRef.current);
+      callTimerRef.current = null;
+    }
+
+    setIsRinging(false);
+    isRingingRef.current = false;
+    setCallDirection(null);
+    setCallDurationSeconds(0);
+    stopMicAudioSession();
+
+    if (call.status === "missed") {
+      setCallStatus("Missed call");
+
+      if (call.direction === "incoming" && lastMissedRingTokenRef.current !== call.ringToken) {
+        lastMissedRingTokenRef.current = call.ringToken;
+
+        const missedEntry: HistoryItem = {
+          id: nextHistoryId(),
+          name: call.contactName,
+          time: "Just now",
+          type: "missed",
+          avatar: contactProfile.avatarUrl
+        };
+
+        setHistoryItems((prev) => [missedEntry, ...prev]);
+        void persistHistoryEntry(missedEntry);
+      }
+
+      if (activeView === "calling") {
+        switchView("chat");
+      }
+
+      return;
+    }
+
+    if (call.status === "ended") {
+      setCallStatus("Call ended");
+      if (activeView === "calling") {
+        switchView("chat");
+      }
+      return;
+    }
+
+    setCallStatus("Idle");
+  }
+
+  async function updateCallState(action: ApiCallAction, contactName?: string) {
+    const response = await requestJson<ApiCallStateResponse>("/api/call/state", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        action,
+        contactName
+      })
+    });
+
+    if (!response?.ok || !response.call) {
+      return null;
+    }
+
+    applyServerCallState(response.call);
+    return response.call;
+  }
+
+  async function syncCallStateFromServer(nextSessionId: string) {
+    const response = await requestJson<ApiCallStateResponse>(
+      `/api/call/state?sessionId=${encodeURIComponent(nextSessionId)}`
+    );
+
+    if (!response?.ok || !response.call) {
+      return;
+    }
+
+    applyServerCallState(response.call);
+  }
+
+  async function syncHistoryFromServer(nextSessionId: string) {
+    const response = await requestJson<ApiHistoryResponse>(
+      `/api/care/history?sessionId=${encodeURIComponent(nextSessionId)}`
+    );
+
+    if (!response?.ok || !Array.isArray(response.history)) {
+      return;
+    }
+
+    setHistoryItems(response.history);
+    const maxId = response.history.reduce((max, item) => Math.max(max, item.id), 0);
+    historyIdRef.current = Math.max(historyIdRef.current, maxId + 1);
+  }
+
+  async function syncSchedulesFromServer(nextSessionId: string) {
+    const response = await requestJson<ApiScheduleResponse>(
+      `/api/care/schedule?sessionId=${encodeURIComponent(nextSessionId)}`
+    );
+
+    if (!response?.ok || !Array.isArray(response.schedules)) {
+      return;
+    }
+
+    setScheduleItems(response.schedules);
+  }
+
+  async function syncCareDataFromServer(nextSessionId: string) {
+    if (syncInFlightRef.current) {
+      return;
+    }
+
+    syncInFlightRef.current = true;
+    setIsSyncing(true);
+
+    try {
+      await Promise.all([syncHistoryFromServer(nextSessionId), syncSchedulesFromServer(nextSessionId), syncCallStateFromServer(nextSessionId)]);
+    } finally {
+      setIsSyncing(false);
+      syncInFlightRef.current = false;
+    }
+  }
+
   async function sendMessageFromInput() {
     const trimmed = messageText.trim();
     if (!trimmed) {
@@ -347,6 +696,21 @@ export function useCareChatController() {
     });
   }
 
+  function consolidateCallForBg(summary: string) {
+    if (!summary.trim()) {
+      return;
+    }
+
+    void requestJson("/api/bg/consolidate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sessionId,
+        transcript: summary
+      })
+    });
+  }
+
   function handleFileSelect(kind: "Photo" | "Gallery Media" | "Document", event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -395,8 +759,14 @@ export function useCareChatController() {
     showToast("Opening Image Fullscreen...");
   }
 
-  function setCallTimerRefAndStatus() {
-    setCallStatus("00:00");
+  function setCallTimerRefAndStatus(initialSeconds = 0) {
+    if (callTimerRef.current) {
+      window.clearInterval(callTimerRef.current);
+    }
+
+    setCallDurationSeconds(initialSeconds);
+    setCallStatus(formatCallDuration(initialSeconds));
+
     callTimerRef.current = window.setInterval(() => {
       setCallDurationSeconds((prev) => {
         const next = prev + 1;
@@ -406,17 +776,65 @@ export function useCareChatController() {
     }, 1000);
   }
 
+  async function acceptCurrentCall() {
+    if (!isRingingRef.current) {
+      return;
+    }
+
+    setIsRinging(false);
+    isRingingRef.current = false;
+    setCallTimerRefAndStatus(0);
+    await updateCallState("accept");
+    void ensureCallAudioSession();
+  }
+
+  function handlePrimaryCallAction() {
+    if (isRinging) {
+      void acceptCurrentCall();
+      return;
+    }
+
+    showToast("Call controls active");
+  }
+
+  function simulateIncomingCall() {
+    void updateCallState("simulate_incoming", contactProfile.name);
+  }
+
   function startCall() {
-    setCallStatus("Ringing...");
+    setCallStatus("Calling...");
     setCallDurationSeconds(0);
     setIsRinging(true);
+    isRingingRef.current = true;
+    setIsMicMuted(false);
+    setIsSpeakerEnabled(true);
+    setMicPermissionState("unknown");
+    micPermissionStateRef.current = "unknown";
+    setCallDirection("outgoing");
     switchView("calling");
 
-    void requestJson("/api/call/init", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sessionId })
-    });
+    void (async () => {
+      const init = await requestJson<ApiCallInitResponse>("/api/call/init", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId })
+      });
+
+      const openingScript = init?.call?.agent?.openingScript?.trim();
+      if (openingScript) {
+        appendMessage({
+          id: nextMessageId(),
+          kind: "system",
+          text: `Call Brief • ${openingScript}`
+        });
+      }
+
+      if (init?.usedCallAgent) {
+        showToast("AI call agent brief ready");
+      }
+    })();
+
+    void updateCallState("start_outgoing", contactProfile.name);
 
     if (callTimerRef.current) {
       window.clearInterval(callTimerRef.current);
@@ -428,13 +846,12 @@ export function useCareChatController() {
     }
 
     callAnswerRef.current = window.setTimeout(() => {
-      setIsRinging(false);
-      setCallTimerRefAndStatus();
+      void acceptCurrentCall();
     }, 3000);
   }
 
-  function persistHistoryEntry(entry: HistoryItem) {
-    void requestJson("/api/care/history", {
+  async function persistHistoryEntry(entry: HistoryItem) {
+    const response = await requestJson<ApiHistoryResponse>("/api/care/history", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -442,6 +859,10 @@ export function useCareChatController() {
         entry
       })
     });
+
+    if (response?.ok && Array.isArray(response.history)) {
+      setHistoryItems(response.history);
+    }
   }
 
   function endCall() {
@@ -464,18 +885,32 @@ export function useCareChatController() {
       text: `Call Ended • ${minutes}m ${seconds}s`
     });
 
-    const callEntry: HistoryItem = {
-      id: nextHistoryId(),
-      name: contactProfile.name,
-      time: "Just now",
-      type: "out",
-      avatar: contactProfile.avatarUrl
-    };
+    const declinedIncoming = isRinging && callDirection === "incoming" && callDurationSeconds === 0;
 
-    setHistoryItems((prev) => [callEntry, ...prev]);
-    persistHistoryEntry(callEntry);
+    if (!declinedIncoming) {
+      const callEntry: HistoryItem = {
+        id: nextHistoryId(),
+        name: contactProfile.name,
+        time: "Just now",
+        type: callDirection === "incoming" ? "in" : "out",
+        avatar: contactProfile.avatarUrl
+      };
+
+      setHistoryItems((prev) => [callEntry, ...prev]);
+      void persistHistoryEntry(callEntry);
+    }
+
+    void updateCallState("end");
+
+    const callSummary = declinedIncoming
+      ? `Missed incoming call from ${contactProfile.name}.`
+      : `${callDirection === "incoming" ? "Incoming" : "Outgoing"} call with ${contactProfile.name} lasted ${minutes}m ${seconds}s.`;
+    consolidateCallForBg(callSummary);
 
     setIsRinging(false);
+    isRingingRef.current = false;
+    stopMicAudioSession();
+    setCallDirection(null);
     setCallDurationSeconds(0);
     switchView("chat");
   }
@@ -572,14 +1007,20 @@ export function useCareChatController() {
     setHistoryItems((prev) => prev.filter((item) => item.id !== id));
     showToast("Call log deleted");
 
-    void requestJson("/api/care/history", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        ids: [id]
-      })
-    });
+    void (async () => {
+      const response = await requestJson<ApiHistoryResponse>("/api/care/history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          ids: [id]
+        })
+      });
+
+      if (response?.ok && Array.isArray(response.history)) {
+        setHistoryItems(response.history);
+      }
+    })();
   }
 
   function deleteSelectedCalls() {
@@ -591,14 +1032,20 @@ export function useCareChatController() {
     setHistoryItems((prev) => prev.filter((item) => !selectedCallIds.includes(item.id)));
     showToast(`${selectedCallIds.length} item(s) deleted`);
 
-    void requestJson("/api/care/history", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        ids: selectedCallIds
-      })
-    });
+    void (async () => {
+      const response = await requestJson<ApiHistoryResponse>("/api/care/history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          ids: selectedCallIds
+        })
+      });
+
+      if (response?.ok && Array.isArray(response.history)) {
+        setHistoryItems(response.history);
+      }
+    })();
 
     setSelectedCallIds([]);
     setSelectionMode(false);
@@ -641,23 +1088,29 @@ export function useCareChatController() {
     setScheduleForm(DEFAULT_SCHEDULE_FORM);
     showToast("Schedule Saved Successfully!");
 
-    void requestJson("/api/care/schedule", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        schedule: {
-          scheduleType: localItem.scheduleType,
-          title: localItem.title,
-          time: localItem.time,
-          duration: localItem.duration,
-          notes: localItem.notes,
-          dateNumber: localItem.dateNumber,
-          dayLabel: localItem.dayLabel,
-          tone: localItem.tone
-        }
-      })
-    });
+    void (async () => {
+      const response = await requestJson<ApiScheduleResponse>("/api/care/schedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          schedule: {
+            scheduleType: localItem.scheduleType,
+            title: localItem.title,
+            time: localItem.time,
+            duration: localItem.duration,
+            notes: localItem.notes,
+            dateNumber: localItem.dateNumber,
+            dayLabel: localItem.dayLabel,
+            tone: localItem.tone
+          }
+        })
+      });
+
+      if (response?.ok && Array.isArray(response.schedules)) {
+        setScheduleItems(response.schedules);
+      }
+    })();
   }
 
   function toggleScheduleStatus(id: number, checked: boolean) {
@@ -673,15 +1126,21 @@ export function useCareChatController() {
       })
     );
 
-    void requestJson("/api/care/schedule", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        id,
-        status
-      })
-    });
+    void (async () => {
+      const response = await requestJson<ApiScheduleResponse>("/api/care/schedule", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          id,
+          status
+        })
+      });
+
+      if (response?.ok && Array.isArray(response.schedules)) {
+        setScheduleItems(response.schedules);
+      }
+    })();
   }
 
   async function triggerInstall() {
@@ -730,6 +1189,47 @@ export function useCareChatController() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    isRingingRef.current = isRinging;
+  }, [isRinging]);
+
+  useEffect(() => {
+    micPermissionStateRef.current = micPermissionState;
+  }, [micPermissionState]);
+
+  useEffect(() => {
+    if (!localDataReady) {
+      return;
+    }
+
+    void syncCareDataFromServer(sessionId);
+
+    const pollId = window.setInterval(() => {
+      void syncCareDataFromServer(sessionId);
+    }, 8000);
+
+    function handleFocus() {
+      void syncCareDataFromServer(sessionId);
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void syncCareDataFromServer(sessionId);
+      }
+    }
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.clearInterval(pollId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+    // This effect should restart only when session identity/readiness changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localDataReady, sessionId]);
 
   useEffect(() => {
     if (!localStateLoadedRef.current) {
@@ -805,6 +1305,7 @@ export function useCareChatController() {
 
   useEffect(() => {
     return () => {
+      stopMicAudioSession();
       if (callTimerRef.current) {
         window.clearInterval(callTimerRef.current);
       }
@@ -845,6 +1346,11 @@ export function useCareChatController() {
     activeDocument,
     callStatus,
     isRinging,
+    callDirection,
+    isMicMuted,
+    isSpeakerEnabled,
+    micPermissionState,
+    isSyncing,
     toastText,
     toastVisible,
     deferredPrompt,
@@ -864,6 +1370,10 @@ export function useCareChatController() {
     openDocumentByName,
     closeDocument,
     openImage,
+    handlePrimaryCallAction,
+    toggleMicrophone,
+    toggleSpeaker,
+    simulateIncomingCall,
     startCall,
     endCall,
     openCamera,
