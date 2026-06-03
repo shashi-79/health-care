@@ -1,6 +1,6 @@
 import { runBgAgent } from "@rhc/agents";
 import { runChatAgent, runChatTransferAgent } from "@rhc/agents";
-import { addUiMessage, listUiMessages } from "@rhc/db";
+import { addUiMessage, listUiMessages, clearUiMessages } from "@rhc/db";
 import { logEvent } from "@rhc/obs";
 import { assertChatModel } from "@rhc/policy";
 import { buildMemoryContext, getSessionMemory, patchSessionMemory } from "@rhc/rag";
@@ -146,7 +146,7 @@ export async function POST(request: NextRequest) {
 
   const riskFlags = [...memoryBefore.riskFlags];
   const safetyInterventions: string[] = [];
-  let triageRouteDecision: "emergency_escalation" | "chat_only" | "chat_plus_bg" = transferDecision.decision === "transfer_to_bg"
+  const triageRouteDecision: "emergency_escalation" | "chat_only" | "chat_plus_bg" = transferDecision.decision === "transfer_to_bg"
     ? "chat_plus_bg"
     : transferDecision.decision === "emergency_escalation" || emergencySignal
       ? "emergency_escalation"
@@ -159,14 +159,13 @@ export async function POST(request: NextRequest) {
   }
 
   const drugQuery = extractDrugQuery(userText);
-  const needsFdaLookup = transferDecision.needsFdaLookup || Boolean(drugQuery);
   let medicalReference: string | undefined;
 
   let assistantText = "";
   let usedChatAgent = false;
   let bgEscalationTemplate: string | undefined;
 
-  let bgAnalysis: {
+  const bgAnalysis: {
     executed: boolean;
     actions: string[];
     drugHints: string[];
@@ -430,5 +429,32 @@ export async function POST(request: NextRequest) {
     },
     memory: updatedMemory,
     uiMessageCount: listUiMessages(sessionId).length
+  });
+}
+
+export async function GET(request: NextRequest) {
+  const sessionId = request.nextUrl.searchParams.get("sessionId") ?? "default";
+  const limitStr = request.nextUrl.searchParams.get("limit");
+  const limit = limitStr ? parseInt(limitStr, 10) : 120;
+  
+  const messages = listUiMessages(sessionId, limit);
+  
+  return NextResponse.json({
+    ok: true,
+    sessionId,
+    messages
+  });
+}
+
+export async function DELETE(request: NextRequest) {
+  const sessionId = request.nextUrl.searchParams.get("sessionId") ?? "default";
+  
+  clearUiMessages(sessionId);
+  logEvent({ category: "chat", action: "history_cleared", sessionId, details: {} });
+  
+  return NextResponse.json({
+    ok: true,
+    sessionId,
+    message: "Chat history cleared"
   });
 }

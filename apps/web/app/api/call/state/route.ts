@@ -5,13 +5,12 @@ import {
   endCall,
   getCallState,
   normalizeSessionId,
-  simulateIncomingCall,
   startOutgoingCall
 } from "../store";
 
 type PostCallStateBody = {
   sessionId?: string;
-  action?: "start_outgoing" | "simulate_incoming" | "accept" | "end" | "clear";
+  action?: "start_outgoing" | "accept" | "end" | "clear";
   contactName?: string;
 };
 
@@ -69,14 +68,7 @@ export async function POST(request: NextRequest) {
     });
   }
 
-  if (action === "simulate_incoming") {
-    return NextResponse.json({
-      ok: true,
-      route: "/api/call/state",
-      sessionId,
-      call: simulateIncomingCall(sessionId, contactName)
-    });
-  }
+
 
   if (action === "accept") {
     return NextResponse.json({

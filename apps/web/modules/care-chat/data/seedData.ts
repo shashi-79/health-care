@@ -11,16 +11,15 @@ import type {
 
 const SEEDED_PROFILE: ContactProfile = {
   id: 1,
-  name: "Mohan",
-  statusText: "Care chat ready",
-  avatarUrl: "https://i.pravatar.cc/150?img=32",
-  phone: "+1 234 567 8900",
-  dobLabel: "12 May 1985",
-  ageLabel: "39 yrs",
-  weightLabel: "76 kg",
-  heightLabel: "178 cm",
-  medicalHistory:
-    "Mild hypertension diagnosed in 2021. No known allergies. Occasional asthma during pollen season. Previous appendectomy (2015)."
+  name: "User",
+  statusText: "Ready",
+  avatarUrl: "",
+  phone: "",
+  dobLabel: "",
+  ageLabel: "",
+  weightLabel: "",
+  heightLabel: "",
+  medicalHistory: ""
 };
 
 const SEEDED_MESSAGES: ChatMessage[] = [];
@@ -58,21 +57,9 @@ export function buildSeededBrowserState(): CareChatBrowserState {
 
 export function buildDefaultDocumentPreview(fileName?: string): DocumentPreview {
   return {
-    title: fileName ?? "Lab_Results_Oct.pdf",
-    summaryTitle: ".pdf Text-",
-    summaryBody: "Here is the extracted text and analysis from the patient document:",
-    tableRows: [
-      {
-        label: "Hemoglobin",
-        result: "14.2 g/dL",
-        range: "13.8-17.2"
-      },
-      {
-        label: "Cholesterol",
-        result: "210 mg/dL",
-        range: "< 200",
-        isAlert: true
-      }
-    ]
+    title: fileName ?? "Document",
+    summaryTitle: "Summary",
+    summaryBody: "Extracted document text...",
+    tableRows: []
   };
 }

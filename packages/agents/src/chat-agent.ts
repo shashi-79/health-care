@@ -212,7 +212,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     {
       role: "system",
       content:
-        "Give practical next steps. If emergency_signal is yes, prioritize urgent in-person escalation immediately before any other advice. VERY IMPORTANT: NEVER suggest general medications or precise dosages yourself directly. You MUST NOT prescribe anything. Only inform the user that the background medical analysis team will provide safe, age/weight-adjusted low dose suggestions via the background system. Keep response concise (3-6 short sentences)."
+        "Give practical next steps. If the user uploads an image, you will receive text starting with '[Image Uploaded - Vision Context:'. Treat this description as your own direct visual observation of the image. Do NOT say you cannot see images. Be supportive and use the description to assist the patient. If emergency_signal is yes, prioritize urgent in-person escalation. VERY IMPORTANT: NEVER suggest general medications or precise dosages yourself directly. You MUST NOT prescribe anything."
     },
     {
       role: "system",

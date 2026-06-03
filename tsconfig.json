@@ -1,0 +1,50 @@
+{
+  "files": [],
+  "references": [
+    {
+      "path": "packages/types/tsconfig.json"
+    },
+    {
+      "path": "packages/ai/tsconfig.json"
+    },
+    {
+      "path": "packages/policy/tsconfig.json"
+    },
+    {
+      "path": "packages/triage/tsconfig.json"
+    },
+    {
+      "path": "packages/ingest/tsconfig.json"
+    },
+    {
+      "path": "packages/agents/tsconfig.json"
+    },
+    {
+      "path": "packages/tools/tsconfig.json"
+    },
+    {
+      "path": "packages/rag/tsconfig.json"
+    },
+    {
+      "path": "packages/medical/tsconfig.json"
+    },
+    {
+      "path": "packages/safety/tsconfig.json"
+    },
+    {
+      "path": "packages/db/tsconfig.json"
+    },
+    {
+      "path": "packages/scheduler/tsconfig.json"
+    },
+    {
+      "path": "packages/reporting/tsconfig.json"
+    },
+    {
+      "path": "packages/obs/tsconfig.json"
+    },
+    {
+      "path": "apps/web/tsconfig.json"
+    }
+  ]
+}

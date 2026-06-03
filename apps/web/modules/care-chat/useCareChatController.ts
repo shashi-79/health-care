@@ -17,6 +17,7 @@ import type {
   ScheduleTone,
   CareChatBrowserState
 } from "./types";
+import type { UiMessage } from "@rhc/types";
 
 const INITIAL_BROWSER_STATE = buildSeededBrowserState();
 
@@ -56,6 +57,11 @@ type ApiChatResponse = {
   };
 };
 
+type ApiChatHistoryResponse = {
+  ok: boolean;
+  messages?: UiMessage[];
+};
+
 type ApiHistoryResponse = {
   ok: boolean;
   history?: HistoryItem[];
@@ -64,6 +70,16 @@ type ApiHistoryResponse = {
 type ApiScheduleResponse = {
   ok: boolean;
   schedules?: ScheduleItem[];
+};
+
+type SchedulerTickJob = {
+  id: string;
+  payload?: Record<string, unknown>;
+};
+
+type ApiSchedulerTickResponse = {
+  ok: boolean;
+  executedJobs?: SchedulerTickJob[];
 };
 
 type ApiCallState = {
@@ -101,7 +117,7 @@ type ApiCallInitResponse = {
   };
 };
 
-type ApiCallAction = "start_outgoing" | "simulate_incoming" | "accept" | "end" | "clear";
+type ApiCallAction = "start_outgoing" | "accept" | "end" | "clear";
 
 type MicPermissionState = "unknown" | "granted" | "denied" | "unsupported";
 
@@ -205,6 +221,7 @@ export function useCareChatController() {
   const [messageText, setMessageText] = useState("");
   const [cameraCaption, setCameraCaption] = useState("");
   const [cameraCaptured, setCameraCaptured] = useState(false);
+  const [capturedImageBase64, setCapturedImageBase64] = useState("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(INITIAL_BROWSER_STATE.chatMessages);
 
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>(INITIAL_BROWSER_STATE.historyItems);
@@ -250,6 +267,7 @@ export function useCareChatController() {
   const geminiAudioRef = useRef<GeminiLiveAudio | null>(null);
   const geminiInitInFlightRef = useRef(false);
   const syncInFlightRef = useRef(false);
+  const schedulerTickInFlightRef = useRef(false);
   const firedScheduleIdsRef = useRef<Set<number>>(new Set());
 
   const isChatView = activeView === "chat";
@@ -515,7 +533,7 @@ export function useCareChatController() {
               geminiAudioRef.current = new GeminiLiveAudio(apiKey, callModel);
               void geminiAudioRef.current.startStream(
                 localMicStreamRef.current,
-                (text) => {
+                () => {
                   // Received transcript from model
                 },
                 (name, args) => {
@@ -580,7 +598,7 @@ export function useCareChatController() {
         const missedEntry: HistoryItem = {
           id: nextHistoryId(),
           name: call.contactName,
-          time: "Just now",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
           type: "missed",
           avatar: contactProfile.avatarUrl
         };
@@ -664,6 +682,38 @@ export function useCareChatController() {
     setScheduleItems(response.schedules);
   }
 
+  async function syncChatMessagesFromServer(nextSessionId: string) {
+    const response = await requestJson<ApiChatHistoryResponse>(
+      `/api/chat?sessionId=${encodeURIComponent(nextSessionId)}`
+    );
+
+    if (!response?.ok || !Array.isArray(response.messages)) {
+      return;
+    }
+
+    const messages = response.messages.map((msg, i: number) => {
+      let messageTime = "Recent";
+      if (msg.createdAt) {
+        try {
+          const d = new Date(msg.createdAt);
+          messageTime = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        } catch { }
+      }
+
+      return {
+        id: i,
+        kind: "text",
+        role: msg.role === "user" ? "patient" : "bot",
+        text: msg.content,
+        time: messageTime
+      } as ChatMessage;
+    });
+
+    if (messages.length > 0) {
+      setChatMessages(messages);
+    }
+  }
+
   async function syncCareDataFromServer(nextSessionId: string) {
     if (syncInFlightRef.current) {
       return;
@@ -673,7 +723,12 @@ export function useCareChatController() {
     setIsSyncing(true);
 
     try {
-      await Promise.all([syncHistoryFromServer(nextSessionId), syncSchedulesFromServer(nextSessionId), syncCallStateFromServer(nextSessionId)]);
+      await Promise.all([
+        syncHistoryFromServer(nextSessionId),
+        syncSchedulesFromServer(nextSessionId),
+        syncCallStateFromServer(nextSessionId),
+        syncChatMessagesFromServer(nextSessionId)
+      ]);
     } finally {
       setIsSyncing(false);
       syncInFlightRef.current = false;
@@ -687,12 +742,14 @@ export function useCareChatController() {
       return;
     }
 
+    const now = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
     appendMessage({
       id: nextMessageId(),
       kind: "text",
       role: "patient",
       text: trimmed,
-      time: "Just now"
+      time: now
     });
 
     setMessageText("");
@@ -716,7 +773,7 @@ export function useCareChatController() {
       kind: "text",
       role: "bot",
       text: response.assistant.content,
-      time: "Just now"
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     });
 
     if (response.triage?.level === "emergency") {
@@ -733,7 +790,7 @@ export function useCareChatController() {
       role: "patient",
       fileName,
       meta,
-      time: "Just now"
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     });
 
     setMediaDocs((prev) => {
@@ -796,7 +853,7 @@ export function useCareChatController() {
         kind: "text",
         role: "patient",
         text: `${kind} uploaded: ${file.name}`,
-        time: "Just now"
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
       });
     }
 
@@ -862,11 +919,23 @@ export function useCareChatController() {
     showToast("Call controls active");
   }
 
-  function simulateIncomingCall() {
-    void updateCallState("simulate_incoming", contactProfile.name);
+  function generateCallLink() {
+    if (typeof window !== "undefined") {
+      const url = `${window.location.origin}/?sessionId=${encodeURIComponent(sessionId)}`;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast("Call link copied to clipboard");
+      }).catch(() => {
+        showToast("Failed to copy link");
+      });
+    }
   }
 
   function startCall() {
+    if (callStatus === "Calling..." || callStatus === "Incoming..." || !isNaN(Number(callDurationSeconds)) && callDurationSeconds > 0 || isRingingRef.current) {
+      showToast("Cannot start call. A call is already active.");
+      return;
+    }
+
     setCallStatus("Calling...");
     setCallDurationSeconds(0);
     setIsRinging(true);
@@ -888,39 +957,42 @@ export function useCareChatController() {
       window.clearTimeout(callAnswerRef.current);
     }
 
-    // Serialized flow: init → state → auto-accept
-    // Ensures call brief is available before auto-accept fires
+    // Parallelized novel flow: Ring & Register immediately, fetch brief concurrently
+    // This strictly eliminates the 5s+ latency bottleneck before the call connects
+    void updateCallState("start_outgoing", contactProfile.name);
+
+    // Auto-accept after a short realistic ring delay immediately
+    if (callAnswerRef.current) {
+      window.clearTimeout(callAnswerRef.current);
+    }
+    callAnswerRef.current = window.setTimeout(() => {
+      void acceptCurrentCall();
+    }, 1500);
+
+    // Fetch the AI agent brief entirely in the background
     void (async () => {
-      // 1. Fetch the call agent brief (may take up to 5s via OpenRouter)
-      const init = await requestJson<ApiCallInitResponse>("/api/call/init", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId })
-      });
-
-      const openingScript = init?.call?.agent?.openingScript?.trim();
-      if (openingScript) {
-        appendMessage({
-          id: nextMessageId(),
-          kind: "system",
-          text: `Call Brief • ${openingScript}`
+      try {
+        const init = await requestJson<ApiCallInitResponse>("/api/call/init", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId })
         });
-      }
 
-      if (init?.usedCallAgent) {
-        showToast("AI call agent brief ready");
-      }
+        const openingScript = init?.call?.agent?.openingScript?.trim();
+        if (openingScript) {
+          appendMessage({
+            id: nextMessageId(),
+            kind: "system",
+            text: `Call Brief • ${openingScript}`
+          });
+        }
 
-      // 2. Register outgoing call state on server (after init completes)
-      await updateCallState("start_outgoing", contactProfile.name);
-
-      // 3. Auto-accept after a short ring delay (starts AFTER init, not in parallel)
-      if (callAnswerRef.current) {
-        window.clearTimeout(callAnswerRef.current);
+        if (init?.usedCallAgent) {
+          showToast("AI call agent brief ready");
+        }
+      } catch (err) {
+        console.error("Failed to fetch initial brief for call", err);
       }
-      callAnswerRef.current = window.setTimeout(() => {
-        void acceptCurrentCall();
-      }, 3000);
     })();
   }
 
@@ -965,7 +1037,7 @@ export function useCareChatController() {
       const callEntry: HistoryItem = {
         id: nextHistoryId(),
         name: contactProfile.name,
-        time: "Just now",
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         type: callDirection === "incoming" ? "in" : "out",
         avatar: contactProfile.avatarUrl
       };
@@ -997,38 +1069,68 @@ export function useCareChatController() {
     switchView("camera");
   }
 
-  function captureImage() {
+  function captureImage(base64?: string) {
+    if (typeof base64 === "string") {
+      setCapturedImageBase64(base64);
+    }
     setCameraCaptured(true);
   }
 
   function closeCamera() {
     setCameraCaptured(false);
+    setCapturedImageBase64("");
     setCameraCaption("");
     switchView("chat");
   }
 
   function sendCapturedImage() {
+    const finalImage = capturedImageBase64 || CAPTURE_PREVIEW_URL;
+    
     appendMessage({
       id: nextMessageId(),
       kind: "image",
       role: "patient",
-      imageUrl: CAPTURE_PREVIEW_URL,
+      imageUrl: finalImage,
       caption: cameraCaption.trim() || undefined,
-      time: "Just now"
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     });
 
-    setMediaImages((prev) => [CAPTURE_PREVIEW_URL, ...prev].slice(0, 30));
+    setMediaImages((prev) => [finalImage, ...prev].slice(0, 30));
 
-    void requestJson("/api/ingest/upload", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        sessionId,
-        mimeType: "image/jpeg",
-        fileName: "captured-image.jpg",
-        text: cameraCaption.trim() || "Captured image sent"
-      })
-    });
+    void (async () => {
+      const uploadRes = await requestJson<{ ok: boolean }>("/api/ingest/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          mimeType: "image/jpeg",
+          fileName: "captured-image.jpg",
+          base64Image: finalImage.includes(",") ? finalImage.split(",")[1] : finalImage,
+          text: cameraCaption.trim() || undefined
+        })
+      });
+
+      if (uploadRes?.ok) {
+        const chatResponse = await requestJson<ApiChatResponse>("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            text: ""
+          })
+        });
+
+        if (chatResponse?.ok && chatResponse.assistant?.content) {
+          appendMessage({
+            id: nextMessageId(),
+            kind: "text",
+            role: "bot",
+            text: chatResponse.assistant.content,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+          });
+        }
+      }
+    })();
 
     closeCamera();
   }
@@ -1079,6 +1181,17 @@ export function useCareChatController() {
     });
   }
 
+  function clearChatHistory() {
+    setChatMessages([]);
+    showToast("Chat history cleared");
+
+    void (async () => {
+      await requestJson(`/api/chat?sessionId=${encodeURIComponent(sessionId)}`, {
+        method: "DELETE",
+      });
+    })();
+  }
+
   function deleteSingleHistory(id: number) {
     setHistoryItems((prev) => prev.filter((item) => item.id !== id));
     showToast("Call log deleted");
@@ -1125,6 +1238,28 @@ export function useCareChatController() {
 
     setSelectedCallIds([]);
     setSelectionMode(false);
+  }
+
+  function clearAllHistoryCalls() {
+    setHistoryItems([]);
+    showToast(`Call history cleared`);
+    setSelectionMode(false);
+    setSelectedCallIds([]);
+
+    void (async () => {
+      const response = await requestJson<ApiHistoryResponse>("/api/care/history", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId,
+          clearAll: true
+        })
+      });
+
+      if (response?.ok && Array.isArray(response.history)) {
+        setHistoryItems(response.history);
+      }
+    })();
   }
 
   function setScheduleFormField(field: keyof ScheduleFormState, value: string) {
@@ -1209,6 +1344,12 @@ export function useCareChatController() {
 
   function toggleScheduleStatus(id: number, checked: boolean) {
     const status = checked ? "done" : "pending";
+
+    if (checked) {
+      firedScheduleIdsRef.current.add(id);
+    } else {
+      firedScheduleIdsRef.current.delete(id);
+    }
 
     setScheduleItems((prev) =>
       prev.map((item) => {
@@ -1325,68 +1466,86 @@ export function useCareChatController() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [localDataReady, sessionId]);
 
-  // ─── Schedule background worker: fires notifications at exact scheduled time ───
+  // Scheduler tick worker: fetches due jobs for this session and updates schedule state.
   useEffect(() => {
-    if (!localDataReady) return;
+    if (!localDataReady) {
+      return;
+    }
 
-    const TICK_MS = 15_000; // check every 15 seconds for precision
+    const TICK_MS = 15_000;
 
-    function checkDueSchedules() {
-      const now = Date.now();
+    async function checkDueSchedules() {
+      if (schedulerTickInFlightRef.current) {
+        return;
+      }
 
-      setScheduleItems((prev) => {
-        let changed = false;
-        const next = prev.map((item) => {
-          // Skip already done or already fired
-          if (item.status === "done") return item;
-          if (firedScheduleIdsRef.current.has(item.id)) return item;
+      schedulerTickInFlightRef.current = true;
 
-          // Parse the schedule time
-          let dueMs: number | null = null;
+      try {
+        const response = await requestJson<ApiSchedulerTickResponse>("/api/scheduler/tick", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId,
+            nowMs: Date.now()
+          })
+        });
 
-          if (item.scheduleDate) {
-            // ISO datetime from new schedules
-            dueMs = new Date(item.scheduleDate).getTime();
-          } else {
-            // Legacy schedules: parse display time like "10:00 AM" against today
-            const match = item.time.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-            if (match) {
-              let h = parseInt(match[1], 10);
-              const m = parseInt(match[2], 10);
-              const period = match[3].toUpperCase();
-              if (period === "PM" && h !== 12) h += 12;
-              if (period === "AM" && h === 12) h = 0;
-              const today = new Date();
-              today.setHours(h, m, 0, 0);
-              dueMs = today.getTime();
+        if (!response?.ok || !Array.isArray(response.executedJobs) || response.executedJobs.length === 0) {
+          return;
+        }
+
+        const dueScheduleIds = response.executedJobs
+          .map((job) => {
+            const scheduleId = job.payload?.scheduleId;
+            return typeof scheduleId === "number" ? scheduleId : null;
+          })
+          .filter((scheduleId): scheduleId is number => scheduleId !== null);
+
+        if (dueScheduleIds.length === 0) {
+          return;
+        }
+
+        const dueIdSet = new Set(dueScheduleIds);
+        const dueItems: ScheduleItem[] = [];
+
+        setScheduleItems((prev) => {
+          let changed = false;
+
+          const next = prev.map((item) => {
+            if (!dueIdSet.has(item.id) || item.status === "done") {
+              return item;
             }
-          }
 
-          if (dueMs === null || dueMs > now) return item;
+            changed = true;
+            dueItems.push(item);
+            return { ...item, status: "done" as const };
+          });
 
-          // Schedule is due! Fire notification.
-          firedScheduleIdsRef.current.add(item.id);
-          changed = true;
+          return changed ? next : prev;
+        });
 
-          // Toast
-          showToast(`⏰ ${item.title} — ${item.notes || item.scheduleType}`);
+        if (dueItems.length === 0) {
+          return;
+        }
 
-          // Browser notification
-          void (async () => {
-            const perm = await ensureNotificationPermission();
-            if (perm === "granted" && typeof window !== "undefined") {
+        for (const item of dueItems) {
+          if (!firedScheduleIdsRef.current.has(item.id)) {
+            firedScheduleIdsRef.current.add(item.id);
+            showToast(`⏰ ${item.title} — ${item.notes || item.scheduleType}`);
+
+            const permission = await ensureNotificationPermission();
+            if (permission === "granted" && typeof window !== "undefined") {
               new window.Notification(`Schedule: ${item.title}`, {
                 body: `${item.scheduleType} • ${item.time}${item.notes ? " — " + item.notes : ""}`
               });
             }
-          })();
 
-          // Auto-trigger call for Call Time schedules
-          if (item.scheduleType.toLowerCase().includes("call")) {
-            setTimeout(() => startCall(), 1500);
+            if (item.scheduleType.toLowerCase().includes("call")) {
+              window.setTimeout(() => startCall(), 1500);
+            }
           }
 
-          // Mark as done on server
           void (async () => {
             await requestJson<ApiScheduleResponse>("/api/care/schedule", {
               method: "PATCH",
@@ -1395,16 +1554,17 @@ export function useCareChatController() {
             });
           })();
 
-          return { ...item, status: "done" as const };
-        });
-
-        return changed ? next : prev;
-      });
+        }
+      } finally {
+        schedulerTickInFlightRef.current = false;
+      }
     }
 
     // Run immediately on mount, then on interval
-    checkDueSchedules();
-    const tickId = window.setInterval(checkDueSchedules, TICK_MS);
+    void checkDueSchedules();
+    const tickId = window.setInterval(() => {
+      void checkDueSchedules();
+    }, TICK_MS);
 
     return () => window.clearInterval(tickId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1510,6 +1670,7 @@ export function useCareChatController() {
     messageText,
     cameraCaption,
     cameraCaptured,
+    capturedImageBase64,
     chatMessages,
     historyItems,
     selectionMode,
@@ -1552,7 +1713,7 @@ export function useCareChatController() {
     handlePrimaryCallAction,
     toggleMicrophone,
     toggleSpeaker,
-    simulateIncomingCall,
+    generateCallLink,
     startCall,
     endCall,
     openCamera,
@@ -1569,6 +1730,8 @@ export function useCareChatController() {
     handleHistoryItemClick,
     deleteSingleHistory,
     deleteSelectedCalls,
+    clearAllHistoryCalls,
+    clearChatHistory,
     saveSchedule,
     toggleScheduleStatus,
     triggerInstall,

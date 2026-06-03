@@ -1,5 +1,5 @@
 import { addUiMessage } from "@rhc/db";
-import { detectInputKind, transcribeAudio } from "@rhc/ingest";
+import { detectInputKind, transcribeAudio, describeImage } from "@rhc/ingest";
 import { NextRequest, NextResponse } from "next/server";
 
 type UploadBody = {
@@ -9,6 +9,7 @@ type UploadBody = {
   sizeBytes?: number;
   text?: string;
   base64Audio?: string;
+  base64Image?: string;
   audioFormat?: "wav" | "mp3" | "ogg";
 };
 
@@ -48,6 +49,16 @@ export async function POST(request: NextRequest) {
       transcript = await transcribeAudio(body.base64Audio, body.audioFormat ?? "wav");
     } catch {
       warning = "Audio transcription failed for this request.";
+    }
+  } else if (kind === "image" && typeof body.base64Image === "string" && body.base64Image.length > 0) {
+    try {
+      const explicitPrompt = typeof body.text === "string" && body.text.trim().length > 0 
+        ? `User says: "${body.text.trim()}". Please evaluate this context alongside the image.`
+        : undefined;
+      const rawDescription = await describeImage(body.base64Image, mimeType ?? "image/jpeg", explicitPrompt);
+      transcript = `[Image Uploaded - Vision Context: ${rawDescription}] ${typeof body.text === "string" ? body.text.trim() : ""}`.trim();
+    } catch {
+      warning = "Image analysis failed for this request.";
     }
   }
 

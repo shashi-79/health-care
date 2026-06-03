@@ -3,14 +3,12 @@
   "compilerOptions": {
     "allowJs": false,
     "incremental": true,
-    "outDir": "dist",
-    "noEmitOnError": false,
+    "noEmit": true,
     "plugins": [
       {
         "name": "next"
       }
-    ],
-    "rootDir": "../.."
+    ]
   },
   "include": [
     "next-env.d.ts",
@@ -19,7 +17,6 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules",
-    "dist"
+    "node_modules"
   ]
 }

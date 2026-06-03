@@ -1,5 +1,5 @@
 import { logEvent } from "@rhc/obs";
-import { listScheduledJobs, runDueJobs, scheduleJob } from "@rhc/scheduler";
+import { listScheduledJobs, runDueJobs, scheduleJob } from "@rhc/scheduler/index";
 import type { ScheduledJobType } from "@rhc/types";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const executedJobs = runDueJobs(typeof body.nowMs === "number" ? body.nowMs : Date.now());
+  const executedJobs = runDueJobs(typeof body.nowMs === "number" ? body.nowMs : Date.now(), 25, sessionId);
 
   for (const job of executedJobs) {
     logEvent({

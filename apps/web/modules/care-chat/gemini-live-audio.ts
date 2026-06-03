@@ -1,4 +1,4 @@
-import { GoogleGenAI, Modality } from "@google/genai";
+import { GoogleGenAI, Modality, Session, LiveServerMessage, FunctionResponse } from "@google/genai";
 
 // ── Base64 lookup table (inlined for AudioWorklet scope which lacks btoa) ──
 const B64_TABLE_CODE = `
@@ -90,8 +90,8 @@ const PLAYBACK_BATCH_INTERVAL_MS = 80; // flush queued audio every 80ms
 export class GeminiLiveAudio {
   private ai: GoogleGenAI;
   private model: string;
-  private sessionPromise: Promise<any> | null = null;
-  private session: any | null = null; // Cached resolved session (eliminates per-chunk .then())
+  private sessionPromise: Promise<Session> | null = null;
+  private session: Session | null = null; // Cached resolved session (eliminates per-chunk .then())
   private inAudioContext: AudioContext | null = null;
   private outAudioContext: AudioContext | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
@@ -111,13 +111,13 @@ export class GeminiLiveAudio {
   async startStream(
     stream: MediaStream,
     onServerResponse?: (text: string) => void,
-    onToolCall?: (name: string, args: Record<string, any>) => void
+    onToolCall?: (name: string, args: Record<string, unknown>) => void
   ) {
     this.isIntentionalDisconnect = false;
-    this.inAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+    this.inAudioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
       sampleRate: 16000,
     });
-    this.outAudioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+    this.outAudioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
       sampleRate: 24000,
     });
     this.nextPlayTime = 0;
@@ -167,23 +167,23 @@ export class GeminiLiveAudio {
             }
           }]
         }]
-      } as any,
+      } as Parameters<typeof this.ai.live.connect>[0]["config"],
       callbacks: {
         onopen: () => {
            console.log("Live API opened");
            this.isSessionActive = true;
         },
-        onclose: (e: any) => {
-          console.log("Gemini Live session closed", e?.reason || "");
+        onclose: (e: CloseEvent) => {
+          console.log("Gemini Live session closed", e.reason || "");
           this.isSessionActive = false;
           this.session = null;
           if (!this.isIntentionalDisconnect) {
               console.log("Unintentional disconnect, should reconnect...");
           }
         },
-        onmessage: (msg: any) => {
+        onmessage: (msg: LiveServerMessage) => {
           if (!this.isSessionActive) return;
-          const serverContent = msg?.serverContent;
+          const serverContent = msg.serverContent;
           if (serverContent?.modelTurn?.parts) {
             for (const part of serverContent.modelTurn.parts) {
               if (part.inlineData && part.inlineData.data) {
@@ -197,10 +197,10 @@ export class GeminiLiveAudio {
           } else if (msg.toolCall) {
             const calls = msg.toolCall.functionCalls;
             if (calls && calls.length > 0) {
-              const responses = calls.map((call: any) => {
+              const responses = calls.map((call) => {
                 const args = call.args || {};
                 if (call.name === "request_prescription_info" && onToolCall) {
-                   onToolCall(call.name, args as Record<string, any>);
+                   onToolCall(call.name, args);
                    return { id: call.id, name: call.name, response: { status: "Background analysis requested successfully. Tell user they will receive a message." } };
                 }
                 return { id: call.id, name: call.name, response: { status: "Unknown tool" } };
@@ -211,7 +211,7 @@ export class GeminiLiveAudio {
             }
           }
         },
-        onerror: (error: any) => {
+        onerror: (error: ErrorEvent) => {
           console.error("Gemini Live session error:", error);
           this.isSessionActive = false;
           this.session = null;
@@ -227,7 +227,8 @@ export class GeminiLiveAudio {
 
       // Backpressure check: skip frame if WebSocket buffer is congested
       try {
-        const ws = (this.session as any)?.ws ?? (this.session as any)?._ws;
+        const conn = this.session.conn as unknown as { ws?: WebSocket };
+        const ws = conn.ws;
         if (ws && typeof ws.bufferedAmount === "number" && ws.bufferedAmount > WS_BACKPRESSURE_BYTES) {
           // Network congested — drop this frame to prevent memory buildup
           return;
@@ -243,8 +244,8 @@ export class GeminiLiveAudio {
             mimeType: "audio/pcm;rate=16000",
           }
         });
-      } catch (err: any) {
-        if (err.message && err.message.includes("CLOSING or CLOSED")) {
+      } catch (err: unknown) {
+        if (err instanceof Error && err.message.includes("CLOSING or CLOSED")) {
           this.isSessionActive = false;
           this.session = null;
           console.warn("WebSocket closed, stopping audio");
@@ -274,10 +275,10 @@ export class GeminiLiveAudio {
    * Send tool call responses using the cached session reference.
    * Falls back to promise resolution if session isn't cached yet.
    */
-  private sendToolResponse(responses: any[]) {
+  private sendToolResponse(responses: FunctionResponse[]) {
     if (this.session) {
       try {
-        this.session.send({ toolResponse: { functionResponses: responses } });
+        this.session.sendToolResponse({ functionResponses: responses });
       } catch (e) {
         console.error("Error sending tool response", e);
       }
@@ -288,7 +289,7 @@ export class GeminiLiveAudio {
     if (this.sessionPromise) {
       this.sessionPromise.then(session => {
         try {
-          session.send({ toolResponse: { functionResponses: responses } });
+          session.sendToolResponse({ functionResponses: responses });
         } catch (e) {
           console.error("Error sending tool response", e);
         }
@@ -409,7 +410,7 @@ export class GeminiLiveAudio {
       this.sessionPromise.then(session => {
          try {
              session.close();
-         } catch(e) {}
+         } catch {}
       }).catch(() => {});
       this.sessionPromise = null;
     }

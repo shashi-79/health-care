@@ -1,0 +1,39 @@
+--- apps/web/modules/care-chat/useCareChatController.ts
++++ apps/web/modules/care-chat/useCareChatController.ts
+@@ -675,6 +675,27 @@
+     setScheduleItems(response.schedules);
+   }
+ 
++  async function syncChatMessagesFromServer(nextSessionId: string) {
++    const response = await requestJson<any>(
++      `/api/chat?sessionId=${encodeURIComponent(nextSessionId)}`
++    );
++
++    if (!response?.ok || !Array.isArray(response.messages)) {
++      return;
++    }
++
++    const messages = response.messages.map((msg: any, i: number) => ({
++      id: i,
++      kind: "text",
++      role: msg.role === "user" ? "patient" : "assistant",
++      text: msg.content,
++      time: "Recent"
++    }));
++
++    if (messages.length > 0) {
++      setChatMessages(messages);
++    }
++  }
++
+   async function syncCareDataFromServer(nextSessionId: string) {
+     if (syncInFlightRef.current) {
+@@ -685,7 +706,7 @@
+     setIsSyncing(true);
+ 
+     try {
+-      await Promise.all([syncHistoryFromServer(nextSessionId), syncSchedulesFromServer(nextSessionId), syncCallStateFromServer(nextSessionId)]);
++      await Promise.all([syncHistoryFromServer(nextSessionId), syncSchedulesFromServer(nextSessionId), syncCallStateFromServer(nextSessionId), syncChatMessagesFromServer(nextSessionId)]);
+     } finally {
+       setIsSyncing(false);
+       syncInFlightRef.current = false;

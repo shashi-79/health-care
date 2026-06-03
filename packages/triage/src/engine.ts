@@ -24,7 +24,7 @@ export function classifySymptoms(symptoms: string[]): TriageResult {
     "dehydration",
     "vomiting",
     "dizziness",
-    "headache",
+    // "headache", // Removing 'headache' here since mild usually implies headache too
     "rash"
   ];
 

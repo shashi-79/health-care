@@ -1,7 +1,13 @@
 {
   "extends": "../../tsconfig.base.jsonc",
   "compilerOptions": {
-    "outDir": "./dist"
+    "outDir": "dist",
+    "declaration": true,
+    "declarationMap": true,
+    "noEmitOnError": false,
+    "rootDir": ".."
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ]
 }

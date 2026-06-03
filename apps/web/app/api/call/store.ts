@@ -71,18 +71,6 @@ export function startOutgoingCall(sessionId: string, contactName = "Mohan") {
   return cloneCallState(state);
 }
 
-export function simulateIncomingCall(sessionId: string, contactName = "Mohan") {
-  const state = getOrCreate(sessionId);
-  state.status = "ringing";
-  state.direction = "incoming";
-  state.contactName = contactName;
-  state.startedAtMs = null;
-  state.endedAtMs = null;
-  state.updatedAt = nowIso();
-  state.ringToken += 1;
-  return cloneCallState(state);
-}
-
 export function acceptCall(sessionId: string) {
   const state = getOrCreate(sessionId);
   state.status = "active";

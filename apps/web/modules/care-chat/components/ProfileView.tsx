@@ -24,7 +24,7 @@ export function ProfileView({ vm }: CareChatViewProps) {
       </header>
 
       <div className="profile-hero">
-        <img src={vm.contactProfile.avatarUrl} alt={`${vm.contactProfile.name} profile avatar`} onError={handleImageError} />
+        <img src={vm.contactProfile.avatarUrl || undefined} alt={`${vm.contactProfile.name} profile avatar`} onError={handleImageError} />
         <h2>{vm.contactProfile.name}</h2>
       </div>
 

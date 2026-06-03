@@ -33,68 +33,9 @@ type CareSessionState = {
 
 const careStore = new Map<string, CareSessionState>();
 
-const DEFAULT_HISTORY: CareHistoryItem[] = [
-  {
-    id: 1,
-    name: "Mohan",
-    time: "10:30 AM",
-    type: "out",
-    avatar: "https://i.pravatar.cc/150?img=32"
-  },
-  {
-    id: 2,
-    name: "Dr. Smith",
-    time: "Yesterday",
-    type: "missed",
-    avatar: "https://i.pravatar.cc/150?img=11"
-  },
-  {
-    id: 3,
-    name: "Jane Roe",
-    time: "Monday",
-    type: "in",
-    avatar: "https://i.pravatar.cc/150?img=5"
-  }
-];
+const DEFAULT_HISTORY: CareHistoryItem[] = [];
 
-const DEFAULT_SCHEDULES: CareScheduleItem[] = [
-  {
-    id: 1,
-    scheduleType: "Consultancy Time",
-    title: "Clinical Consultation",
-    time: "10:00 AM",
-    duration: "30 mins",
-    notes: "Audio follow-up",
-    dateNumber: "9",
-    dayLabel: "Mon",
-    tone: "primary",
-    status: "pending"
-  },
-  {
-    id: 2,
-    scheduleType: "Medicine Time",
-    title: "Review Lab Results",
-    time: "1:30 PM",
-    duration: "15 mins",
-    notes: "Mohan",
-    dateNumber: "9",
-    dayLabel: "Mon",
-    tone: "success",
-    status: "pending"
-  },
-  {
-    id: 3,
-    scheduleType: "Call Time",
-    title: "Follow-up Call",
-    time: "9:00 AM",
-    duration: "20 mins",
-    notes: "Pending",
-    dateNumber: "10",
-    dayLabel: "Tue",
-    tone: "warning",
-    status: "pending"
-  }
-];
+const DEFAULT_SCHEDULES: CareScheduleItem[] = [];
 
 function cloneHistoryItem(item: CareHistoryItem): CareHistoryItem {
   return { ...item };
@@ -163,6 +104,12 @@ export function deleteHistoryItems(sessionId: string, ids: number[]): CareHistor
   const idSet = new Set(ids);
   state.history = state.history.filter((item) => !idSet.has(item.id));
   return state.history.map(cloneHistoryItem);
+}
+
+export function clearHistory(sessionId: string): CareHistoryItem[] {
+  const state = getOrCreateState(sessionId);
+  state.history = [];
+  return state.history;
 }
 
 export function listSchedules(sessionId: string): CareScheduleItem[] {

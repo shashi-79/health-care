@@ -54,9 +54,13 @@ export function listScheduledJobs(sessionId?: string): ScheduledJob[] {
 		.map((job) => cloneJob(job));
 }
 
-export function runDueJobs(nowMs = Date.now(), maxJobs = 25): ScheduledJob[] {
-	const dueJobs = [...jobStore.values()]
-		.filter((job) => job.status === "queued" && job.runAt <= nowMs)
+export function runDueJobs(nowMs = Date.now(), maxJobs = 25, sessionId?: string): ScheduledJob[] {
+        const dueJobs = [...jobStore.values()]
+                .filter((job) => {
+                        if (job.status !== "queued" || job.runAt > nowMs) return false;
+                        if (sessionId && job.sessionId !== sessionId) return false;
+                        return true;
+                })
 		.sort((a, b) => a.runAt - b.runAt)
 		.slice(0, maxJobs);
 

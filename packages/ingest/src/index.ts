@@ -25,3 +25,4 @@ export function detectInputKind(mimeType?: string): InputKind {
 
 export * from "./audio";
 export * from "./document";
+export * from "./image";

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { addHistoryItem, deleteHistoryItems, listHistory, normalizeSessionId } from "../store";
+import { addHistoryItem, deleteHistoryItems, clearHistory, listHistory, normalizeSessionId } from "../store";
 
 type AddHistoryBody = {
   sessionId?: string;
@@ -15,6 +15,7 @@ type AddHistoryBody = {
 type DeleteHistoryBody = {
   sessionId?: string;
   ids?: number[];
+  clearAll?: boolean;
 };
 
 export async function GET(request: NextRequest) {
@@ -97,12 +98,22 @@ export async function DELETE(request: NextRequest) {
     ? body.ids.filter((value): value is number => typeof value === "number")
     : [];
 
+  if (body.clearAll) {
+    const history = clearHistory(sessionId);
+    return NextResponse.json({
+      ok: true,
+      route: "/api/care/history",
+      sessionId,
+      history
+    });
+  }
+
   if (ids.length === 0) {
     return NextResponse.json(
       {
         ok: false,
         route: "/api/care/history",
-        error: "ids[] is required."
+        error: "ids[] or clearAll is required."
       },
       { status: 400 }
     );

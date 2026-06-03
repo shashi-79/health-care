@@ -39,8 +39,8 @@ export function HistoryView({ vm }: CareChatViewProps) {
 
       <div
         className="create-call-link"
-        onClick={vm.simulateIncomingCall}
-        onKeyDown={(event) => handleActionKeyDown(event, vm.simulateIncomingCall)}
+        onClick={vm.generateCallLink}
+        onKeyDown={(event) => handleActionKeyDown(event, vm.generateCallLink)}
         role="button"
         tabIndex={0}
       >
@@ -116,7 +116,11 @@ export function HistoryView({ vm }: CareChatViewProps) {
           <button className="icon-btn text-red" id="bulk-delete-btn" onClick={vm.deleteSelectedCalls} type="button">
             Delete Selected
           </button>
-        ) : null}
+        ) : (
+          <button className="icon-btn text-red" id="bulk-delete-all-btn" onClick={vm.clearAllHistoryCalls} type="button">
+            Clear All
+          </button>
+        )}
       </div>
 
       <button className="fab-btn call-fab" onClick={vm.startCall} type="button">

@@ -17,6 +17,7 @@ import {
   Plus,
   Search,
   SendHorizontal,
+  Trash2,
   X
 } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
@@ -37,7 +38,7 @@ export function MainChatView({ vm }: CareChatViewProps) {
             <ArrowLeft />
           </button>
           <div className="profile-pic">
-            <img src={vm.contactProfile.avatarUrl} alt={`${vm.contactProfile.name} profile`} onError={handleImageError} />
+            <img src={vm.contactProfile.avatarUrl || undefined} alt={`${vm.contactProfile.name} profile`} onError={handleImageError} />
           </div>
           <div className="contact-info">
             <h2>{vm.contactProfile.name}</h2>
@@ -86,6 +87,10 @@ export function MainChatView({ vm }: CareChatViewProps) {
               <button onClick={vm.showMedia} type="button">
                 <Images />
                 Media, Links, Docs
+              </button>
+              <button onClick={() => { vm.setChatMenuOpen(false); vm.clearChatHistory(); }} type="button">
+                <Trash2 />
+                Clear Chat
               </button>
             </div>
           </div>

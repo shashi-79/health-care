@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { scheduleJob } from "@rhc/scheduler/index";
+import type { ScheduledJobType } from "@rhc/types";
 import { addScheduleItem, listSchedules, normalizeSessionId, updateScheduleStatus } from "../store";
 
 type AddScheduleBody = {
@@ -21,6 +23,23 @@ type PatchScheduleBody = {
   id?: number;
   status?: "pending" | "done";
 };
+
+function resolveScheduleJobType(scheduleType: string): ScheduledJobType {
+  if (scheduleType.toLowerCase().includes("call")) {
+    return "consolidate_call";
+  }
+
+  return "follow_up_checkin";
+}
+
+function resolveRunAtMs(scheduleDate?: string) {
+  if (!scheduleDate) {
+    return null;
+  }
+
+  const runAt = Date.parse(scheduleDate);
+  return Number.isFinite(runAt) ? runAt : null;
+}
 
 export async function GET(request: NextRequest) {
   const sessionId = normalizeSessionId(request.nextUrl.searchParams.get("sessionId"));
@@ -76,11 +95,29 @@ export async function POST(request: NextRequest) {
     scheduleDate: schedule.scheduleDate
   });
 
+  const runAt = resolveRunAtMs(created.scheduleDate);
+  const scheduledJob =
+    runAt === null
+      ? null
+      : scheduleJob({
+          sessionId,
+          type: resolveScheduleJobType(created.scheduleType),
+          runAt,
+          payload: {
+            source: "care_schedule",
+            scheduleId: created.id,
+            scheduleType: created.scheduleType,
+            title: created.title,
+            scheduleDate: created.scheduleDate ?? null
+          }
+        });
+
   return NextResponse.json({
     ok: true,
     route: "/api/care/schedule",
     sessionId,
     created,
+    scheduledJob,
     schedules: listSchedules(sessionId)
   });
 }

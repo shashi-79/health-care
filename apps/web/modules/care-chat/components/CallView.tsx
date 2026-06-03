@@ -27,7 +27,7 @@ export function CallView({ vm }: CareChatViewProps) {
       </div>
       <div className="call-center">
         <div className={`avatar-ring ${vm.isRinging ? "is-ringing" : ""}`}>
-          <img src={vm.contactProfile.avatarUrl} alt={`${vm.contactProfile.name} call avatar`} onError={handleImageError} />
+          <img src={vm.contactProfile.avatarUrl || undefined} alt={`${vm.contactProfile.name} call avatar`} onError={handleImageError} />
         </div>
       </div>
       {isIncomingRinging ? (
