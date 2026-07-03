@@ -38,9 +38,6 @@
       "path": "packages/scheduler/tsconfig.json"
     },
     {
-      "path": "packages/reporting/tsconfig.json"
-    },
-    {
       "path": "packages/obs/tsconfig.json"
     },
     {

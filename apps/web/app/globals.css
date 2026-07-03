@@ -1754,3 +1754,38 @@ body {
   padding-top: calc(env(safe-area-inset-top, 0px) + 142px);
 }
 
+/* OCR Scanning Laser Line Animation */
+.ocr-laser-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  z-index: 5;
+}
+
+.ocr-laser-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent 10%, #34d399 50%, transparent 90%);
+  box-shadow: 0 0 15px #34d399, 0 0 5px #34d399;
+  animation: ocr-sweep 2.5s ease-in-out infinite;
+  opacity: 0.9;
+}
+
+@keyframes ocr-sweep {
+  0% {
+    top: 0%;
+  }
+  50% {
+    top: 100%;
+  }
+  100% {
+    top: 0%;
+  }
+}
+

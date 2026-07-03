@@ -24,7 +24,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
 
 export async function describeImage(base64Image: string, mimeType: string, customPrompt?: string) {
   const modelName = process.env.VISION_MODEL || "openai/gpt-4o-mini";
-  const prompt = customPrompt || "Analyze this image from a rural healthcare patient. Describe any visible symptoms, documents, or context concisely.";
+  const prompt = customPrompt || "Analyze this image from a rural healthcare patient. Describe any visible symptoms or context. If the image contains any visible text, hand-written notes, prescriptions, medical reports, or medication labels, transcribe all of the text verbatim (including medication names, dosages, symptoms, instructions, and test results) so that it can be processed by the text chatbot.";
 
   if (modelName.toLowerCase().includes("gemini")) {
     const ai = getGeminiClient();
@@ -81,4 +81,14 @@ export async function describeImage(base64Image: string, mimeType: string, custo
       .trim();
   }
   return "";
+}
+
+import { createWorker } from "tesseract.js";
+
+export async function performOcr(base64Image: string, mimeType: string): Promise<string> {
+  const buffer = Buffer.from(base64Image, "base64");
+  const worker = await createWorker("eng");
+  const ret = await worker.recognize(buffer);
+  await worker.terminate();
+  return ret.data.text ?? "";
 }

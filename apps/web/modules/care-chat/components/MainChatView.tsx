@@ -5,16 +5,9 @@
 import {
   ArrowDownToLine,
   ArrowLeft,
-  CalendarDays,
-  Camera,
-  FileText,
   History,
-  Image as ImageIcon,
-  Images,
-  Mic,
   MoreVertical,
   Phone,
-  Plus,
   Search,
   SendHorizontal,
   Trash2,
@@ -22,6 +15,53 @@ import {
 } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
 import { handleActionKeyDown, handleImageError } from "./viewTypes";
+import { ImagePreviewOverlay } from "./ImagePreviewOverlay";
+function renderFormattedText(text: string) {
+  if (!text) return null;
+
+  const parts = text.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g);
+
+  return parts.map((part, index) => {
+    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (linkMatch) {
+      const label = linkMatch[1];
+      const url = linkMatch[2];
+      const isDataOrPdf = url.startsWith("data:") || url.includes(".pdf") || url.includes("/api/report/pdf");
+
+      return (
+        <a
+          key={index}
+          href={url}
+          download={isDataOrPdf ? "Medical_Report.pdf" : undefined}
+          target={url.startsWith("http") ? "_blank" : undefined}
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            fontWeight: 600,
+            color: "#1a73e8",
+            textDecoration: "underline",
+            marginTop: "6px",
+            marginBottom: "4px",
+            padding: "6px 12px",
+            borderRadius: "8px",
+            backgroundColor: "rgba(26, 115, 232, 0.1)"
+          }}
+        >
+          {label}
+        </a>
+      );
+    }
+
+    const boldMatch = part.match(/^\*\*([^*]+)\*\*$/);
+    if (boldMatch) {
+      return <strong key={index}>{boldMatch[1]}</strong>;
+    }
+
+    return part;
+  });
+}
 
 export function MainChatView({ vm }: CareChatViewProps) {
   return (
@@ -46,9 +86,6 @@ export function MainChatView({ vm }: CareChatViewProps) {
           </div>
         </div>
         <div className="header-actions">
-          <button className="icon-btn" onClick={() => vm.setCalendarOpen(true)} type="button" aria-label="Calendar">
-            <CalendarDays />
-          </button>
           <button className="icon-btn" onClick={vm.startCall} type="button" aria-label="Call">
             <Phone />
           </button>
@@ -60,7 +97,6 @@ export function MainChatView({ vm }: CareChatViewProps) {
               className="icon-btn"
               onClick={(event) => {
                 event.stopPropagation();
-                vm.setAttachSheetOpen(false);
                 vm.setChatMenuOpen((prev) => !prev);
               }}
               id="menu-trigger"
@@ -83,10 +119,6 @@ export function MainChatView({ vm }: CareChatViewProps) {
               <button onClick={vm.openHistory} type="button">
                 <History />
                 Call History
-              </button>
-              <button onClick={vm.showMedia} type="button">
-                <Images />
-                Media, Links, Docs
               </button>
               <button onClick={() => { vm.setChatMenuOpen(false); vm.clearChatHistory(); }} type="button">
                 <Trash2 />
@@ -142,33 +174,13 @@ export function MainChatView({ vm }: CareChatViewProps) {
             );
           }
 
-          if (message.kind === "doc") {
-            return (
-              <button
-                key={message.id}
-                className={`message ${message.role === "bot" ? "bot-msg" : "patient-msg"} doc-message`}
-                onClick={() => vm.openDocumentByName(message.fileName)}
-                type="button"
-              >
-                <div className="doc-icon">
-                  <FileText />
-                </div>
-                <div className="doc-info">
-                  <strong>{message.fileName}</strong>
-                  <div className="doc-meta">{message.meta}</div>
-                </div>
-                <span className="time">{message.time}</span>
-              </button>
-            );
-          }
-
           if (message.kind === "image") {
             return (
               <div key={message.id} className={`message ${message.role === "bot" ? "bot-msg" : "patient-msg"} image-message`}>
                 <img
                   src={message.imageUrl}
                   alt={message.caption ? `Shared image: ${message.caption}` : "Shared image from chat"}
-                  onClick={vm.openImage}
+                  onClick={() => vm.openImage(message.imageUrl)}
                   onError={handleImageError}
                 />
                 {message.caption ? <p>{message.caption}</p> : null}
@@ -179,7 +191,7 @@ export function MainChatView({ vm }: CareChatViewProps) {
 
           return (
             <div key={message.id} className={`message ${message.role === "bot" ? "bot-msg" : "patient-msg"}`}>
-              {message.text}
+              {renderFormattedText(message.text)}
               <span className="time">{message.time}</span>
             </div>
           );
@@ -187,67 +199,6 @@ export function MainChatView({ vm }: CareChatViewProps) {
       </main>
 
       <footer className="chat-input-area glassmorphism">
-        <div>
-          <button
-            className="icon-btn attachment-btn"
-            id="attach-trigger"
-            onClick={(event) => {
-              event.stopPropagation();
-              vm.setChatMenuOpen(false);
-              vm.setAttachSheetOpen((prev) => !prev);
-            }}
-            type="button"
-            aria-label="Attach"
-          >
-            <Plus />
-          </button>
-          <div className={`attachment-sheet ${vm.attachSheetOpen ? "active" : ""}`} id="attach-sheet">
-            <div className="attach-grid">
-              <input
-                type="file"
-                id="camera-input"
-                accept="image/*"
-                capture="environment"
-                className="input-hidden"
-                onChange={(event) => vm.handleFileSelect("Photo", event)}
-              />
-              <input
-                type="file"
-                id="gallery-input"
-                accept="image/*,video/*"
-                className="input-hidden"
-                onChange={(event) => vm.handleFileSelect("Gallery Media", event)}
-              />
-              <input
-                type="file"
-                id="document-input"
-                accept=".pdf,.doc,.docx,.txt"
-                className="input-hidden"
-                onChange={(event) => vm.handleFileSelect("Document", event)}
-              />
-
-              <button className="attach-item gallery" onClick={vm.openGalleryPicker} type="button">
-                <div className="icon-circle">
-                  <ImageIcon />
-                </div>
-                <span>Gallery</span>
-              </button>
-              <button className="attach-item camera" onClick={vm.openCameraPicker} type="button">
-                <div className="icon-circle">
-                  <Camera />
-                </div>
-                <span>Camera</span>
-              </button>
-              <button className="attach-item document" onClick={vm.openDocumentPicker} type="button">
-                <div className="icon-circle">
-                  <FileText />
-                </div>
-                <span>Document</span>
-              </button>
-            </div>
-          </div>
-        </div>
-
         <textarea
           placeholder="Message..."
           rows={1}
@@ -257,14 +208,19 @@ export function MainChatView({ vm }: CareChatViewProps) {
         />
 
         <div className="input-actions">
-          <button className="icon-btn camera-btn" onClick={vm.openCamera} type="button" aria-label="Open camera">
-            <Camera />
-          </button>
-          <button className="icon-btn voice-btn primary-bg" id="voice-send-btn" onClick={vm.sendMessageFromInput} type="button">
-            {vm.messageText.trim().length > 0 ? <SendHorizontal /> : <Mic />}
+          <button
+            className="icon-btn send-btn primary-bg"
+            id="send-btn"
+            onClick={vm.sendMessageFromInput}
+            type="button"
+            disabled={vm.messageText.trim().length === 0}
+            aria-label="Send message"
+          >
+            <SendHorizontal />
           </button>
         </div>
       </footer>
+      <ImagePreviewOverlay vm={vm} />
     </div>
   );
 }

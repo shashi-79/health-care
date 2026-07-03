@@ -268,7 +268,10 @@ async function lookupDrugHints(query?: string, patientAge?: number, patientWeigh
 
 export async function runBgAgent(input: BgAgentInput): Promise<BgAgentResult> {
   assertBgModel(input.model);
-  assertToolsAllowedOnlyForBg(input.enableTools ?? true);
+  // Only assert when tools are enabled — disabling tools is a valid BG operation
+  if (input.enableTools !== false) {
+    assertToolsAllowedOnlyForBg(true);
+  }
 
   const budget = buildContextBudget(input.model);
   const fittedMessages = fitMessagesToBudget(input.messages, budget);

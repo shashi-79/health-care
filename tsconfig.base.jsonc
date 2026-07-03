@@ -55,9 +55,6 @@
       "@rhc/scheduler/*": [
         "./packages/scheduler/src/*"
       ],
-      "@rhc/reporting/*": [
-        "./packages/reporting/src/*"
-      ],
       "@rhc/obs/*": [
         "./packages/obs/src/*"
       ],

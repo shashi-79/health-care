@@ -1,4 +1,4 @@
-import type { ChatMessage, HistoryItem, ScheduleItem } from "./types";
+import type { ChatMessage, HistoryItem } from "./types";
 
 export const INITIAL_MESSAGES: ChatMessage[] = [
   {
@@ -14,14 +14,6 @@ export const INITIAL_MESSAGES: ChatMessage[] = [
     role: "patient",
     text: "Thank you. Could you send them over?",
     time: "10:02 AM"
-  },
-  {
-    id: 3,
-    kind: "doc",
-    role: "bot",
-    fileName: "Lab_Results_Oct.pdf",
-    meta: "4 Pages • 1.2 MB • PDF",
-    time: "10:05 AM"
   },
   {
     id: 4,
@@ -54,45 +46,6 @@ export const INITIAL_HISTORY: HistoryItem[] = [
     time: "Monday",
     type: "in",
     avatar: "https://i.pravatar.cc/150?img=5"
-  }
-];
-
-export const INITIAL_SCHEDULES: ScheduleItem[] = [
-  {
-    id: 1,
-    scheduleType: "Consultancy Time",
-    title: "Clinical Consultation",
-    time: "10:00 AM",
-    duration: "30 mins",
-    notes: "Audio follow-up",
-    dateNumber: "9",
-    dayLabel: "Mon",
-    tone: "primary",
-    status: "pending"
-  },
-  {
-    id: 2,
-    scheduleType: "Medicine Time",
-    title: "Review Lab Results",
-    time: "1:30 PM",
-    duration: "15 mins",
-    notes: "Mohan",
-    dateNumber: "9",
-    dayLabel: "Mon",
-    tone: "success",
-    status: "pending"
-  },
-  {
-    id: 3,
-    scheduleType: "Call Time",
-    title: "Follow-up Call",
-    time: "9:00 AM",
-    duration: "20 mins",
-    notes: "Pending",
-    dateNumber: "10",
-    dayLabel: "Tue",
-    tone: "warning",
-    status: "pending"
   }
 ];
 

@@ -85,7 +85,14 @@ export function buildEmergencyEscalationTemplate(symptoms?: string[]): string {
 
 export function applyAssistantGuardrails(text: string): AssistantSafetyReview {
 	const interventions: string[] = [];
-	const cleaned = sanitizeAssistantResponse(text);
+	
+	const dataUrlMatches: string[] = [];
+	const placeholderText = text.replace(/\[([^\]]+)\]\((data:[^)]+)\)/g, (match) => {
+		dataUrlMatches.push(match);
+		return `__DATA_URL_LINK_${dataUrlMatches.length - 1}__`;
+	});
+
+	const cleaned = sanitizeAssistantResponse(placeholderText);
 	const sentences = splitSentences(cleaned);
 
 	let nextSentences = sentences;
@@ -114,8 +121,13 @@ export function applyAssistantGuardrails(text: string): AssistantSafetyReview {
 		nextText = "Please seek in-person clinical assessment for safe next steps.";
 	}
 
+	let finalText = sanitizeAssistantResponse(nextText);
+	dataUrlMatches.forEach((match, index) => {
+		finalText = finalText.replace(`__DATA_URL_LINK_${index}__`, match);
+	});
+
 	return {
-		text: sanitizeAssistantResponse(nextText),
+		text: finalText,
 		interventions
 	};
 }

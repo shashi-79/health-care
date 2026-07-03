@@ -19,6 +19,7 @@ export type ChatAgentInput = {
   dosingInsights?: string[];
   medicalReference?: string;
   timeoutMs?: number;
+  enableTools?: boolean;
 };
 
 export type ChatAgentResult = {
@@ -26,10 +27,7 @@ export type ChatAgentResult = {
   model: string;
   responseText: string;
   usedPromptChars: number;
-  scheduledCall?: {
-    time: string;
-    title?: string;
-  };
+  performOcrRequested?: boolean;
 };
 
 export type ChatTransferDecisionInput = {
@@ -207,12 +205,18 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     {
       role: "system",
       content:
-        "You are a human healthcare guide for rural follow-up chat. Use empathetic, clear, non-technical language and avoid mentioning AI/chatbot/model terms."
+        "You are a human healthcare guide, fitness coach, and dietician for rural follow-up care. Use empathetic, clear, non-technical language and avoid mentioning AI/chatbot/model terms."
     },
     {
       role: "system",
       content:
-        "Give practical next steps. If the user uploads an image, you will receive text starting with '[Image Uploaded - Vision Context:'. Treat this description as your own direct visual observation of the image. Do NOT say you cannot see images. Be supportive and use the description to assist the patient. If emergency_signal is yes, prioritize urgent in-person escalation. VERY IMPORTANT: NEVER suggest general medications or precise dosages yourself directly. You MUST NOT prescribe anything."
+        "Give practical next steps, custom dietary recommendations, nutrition advice, and safe fitness routines based on the patient's profile. If the user uploads an image, you will receive text starting with '[Image Uploaded - Vision Context:'. Treat this description as your own direct visual observation of the image. Do NOT say you cannot see images. Be supportive and use the description to assist the patient. If emergency_signal is yes, prioritize urgent in-person escalation. VERY IMPORTANT: NEVER suggest general medications or precise dosages yourself directly. You MUST NOT prescribe anything."
+    },
+    {
+      role: "system",
+      content:
+        "Tool Usage Guidelines:\n" +
+        "1. If the user uploads an image, asks you to 'read the image', 'read prescription', or asks questions about text in an image/prescription they sent, you MUST call 'perform_ocr' to extract the text."
     },
     {
       role: "system",
@@ -227,21 +231,17 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     openrouter.chat.completions.create({
       model: input.model,
       temperature: 0.25,
-      max_tokens: 260,
+      max_tokens: 320,
       messages,
-      tools: [
+      tools: input.enableTools === false ? undefined : [
         {
           type: "function",
           function: {
-            name: "schedule_call",
-            description: "Schedule an autonomous voice call callback with the patient. Use this if the patient requests a call, callback, or phone contact at a specific time or immediately.",
+            name: "perform_ocr",
+            description: "Extracts and transcribes all text from the most recently uploaded image/prescription.",
             parameters: {
               type: "object",
-              properties: {
-                time: { type: "string", description: "Time exactly as requested, e.g. 'now', '5 minutes', '2:00 PM', 'tomorrow morning'" },
-                title: { type: "string", description: "Brief reason or title for the call" }
-              },
-              required: ["time"]
+              properties: {}
             }
           }
         }
@@ -254,22 +254,16 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
   const responseMessage = completion.choices?.[0]?.message;
   let responseText = extractResponseText(responseMessage?.content);
   
-  let scheduledCall;
+  let performOcrRequested = false;
+
   if (responseMessage?.tool_calls?.length > 0) {
-    const call = responseMessage.tool_calls.find((tc: any) => tc.function.name === "schedule_call");
-    if (call && call.function.arguments) {
-      try {
-        const args = JSON.parse(call.function.arguments);
-        scheduledCall = {
-          time: args.time || "now",
-          title: args.title || "Follow-up Callback"
-        };
-      } catch (e) {}
+    if (responseMessage.tool_calls.some((tc: any) => tc.function.name === "perform_ocr")) {
+      performOcrRequested = true;
     }
   }
 
-  if (!responseText && scheduledCall) {
-    responseText = `I have scheduled a call for ${scheduledCall.time}.`;
+  if (!responseText && performOcrRequested) {
+    responseText = `Scanning the image for text...`;
   } else if (!responseText) {
     throw new Error("Chat agent returned an empty response.");
   }
@@ -279,7 +273,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     model: input.model,
     responseText,
     usedPromptChars: promptChars,
-    scheduledCall
+    performOcrRequested
   };
 }
 

@@ -205,22 +205,6 @@ export function ProfileView({ vm }: CareChatViewProps) {
           </div>
         </div>
       </section>
-
-      <section className="profile-card media-nav-card">
-        <button className="profile-nav-row" onClick={vm.showMedia} type="button">
-          <div>
-            <span>Media, links, and docs</span>
-            <small>
-              {vm.mediaImages.length + vm.mediaDocs.length + vm.mediaLinks.length}
-              {" "}
-              items available
-            </small>
-          </div>
-          <span>
-            <ChevronRight />
-          </span>
-        </button>
-      </section>
     </div>
   );
 }

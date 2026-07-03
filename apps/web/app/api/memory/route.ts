@@ -1,5 +1,4 @@
 import { addUiMessage, listUiMessages } from "@rhc/db";
-import { buildSessionReport } from "@rhc/reporting";
 import {
   buildMemoryContext,
   getSessionMemory,
@@ -47,21 +46,13 @@ export async function GET(request: NextRequest) {
   const memory = await getSessionMemory(sessionId);
   const uiMessages = await listUiMessages(sessionId, 120);
 
-  const report = buildSessionReport({
-    sessionId,
-    memory,
-    uiMessages,
-    generatedBy: "memory_route"
-  });
-
   return NextResponse.json({
     ok: true,
     route: "/api/memory",
     sessionId,
     memory,
     memoryContext: buildMemoryContext(memory),
-    uiMessages,
-    reportPreview: report.markdown.slice(0, 500)
+    uiMessages
   });
 }
 

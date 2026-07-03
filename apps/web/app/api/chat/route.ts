@@ -12,7 +12,6 @@ import {
 import { classifySymptoms } from "@rhc/triage";
 import type { BgPromptMessage } from "@rhc/types";
 import { enqueueBgAnalysis } from "@rhc/worker";
-import { addScheduleItem } from "../care/store";
 import { NextRequest, NextResponse } from "next/server";
 
 type ChatRequestBody = {
@@ -115,14 +114,17 @@ export async function POST(request: NextRequest) {
   const symptoms = normalizeSymptoms(body.symptoms);
 
   if (!userText && symptoms.length === 0) {
-    return NextResponse.json(
-      {
-        ok: false,
-        route: "/api/chat",
-        error: "Provide either text or symptoms."
-      },
-      { status: 400 }
-    );
+    const priorMessagesCount = (await listUiMessages(sessionId, 1)).length;
+    if (priorMessagesCount === 0) {
+      return NextResponse.json(
+        {
+          ok: false,
+          route: "/api/chat",
+          error: "Provide either text or symptoms."
+        },
+        { status: 400 }
+      );
+    }
   }
 
   const triageInput = symptoms.length > 0 ? symptoms : [userText];
@@ -191,7 +193,8 @@ export async function POST(request: NextRequest) {
     lookupStatus: "not_requested"
   };
 
-  const shouldRunBgAnalysis = !emergencySignal && transferDecision.decision === "transfer_to_bg";
+  const isOcrMessage = userText.startsWith("[OCR Text Extracted") || userText.startsWith("[OCR Scan:");
+  const shouldRunBgAnalysis = !emergencySignal && (transferDecision.decision === "transfer_to_bg" || isOcrMessage);
 
   if (shouldRunBgAnalysis) {
     const bgModel = process.env.BG_MODEL;
@@ -233,7 +236,7 @@ export async function POST(request: NextRequest) {
             query: userText,
             patientAge: memoryBefore.rootDetails?.age,
             patientWeightKg: memoryBefore.rootDetails?.weightKg,
-            enableTools: Boolean(drugQuery)
+            enableTools: Boolean(drugQuery) || isOcrMessage
           }),
           new Promise((_, reject) =>
             setTimeout(() => reject(new Error("inline_bg_timeout")), 8_000)
@@ -310,27 +313,39 @@ export async function POST(request: NextRequest) {
       assistantText = chatResult.responseText;
       usedChatAgent = true;
 
-      if (chatResult.scheduledCall) {
-        let scheduleDate = new Date().toISOString();
-        if (chatResult.scheduledCall.time.toLowerCase().includes("tomorrow")) {
-          const d = new Date();
-          d.setDate(d.getDate() + 1);
-          scheduleDate = d.toISOString();
+      if (chatResult.performOcrRequested) {
+        const lastImageMsg = [...priorMessages].reverse().find(m => m.content.startsWith("[Image Uploaded"));
+        let ocrText = "No uploaded image found in the recent history to read.";
+        if (lastImageMsg) {
+          const match = lastImageMsg.content.match(/Vision Context:\s*(.*?)\]/);
+          ocrText = match ? match[1].trim() : lastImageMsg.content;
         }
-        
-        addScheduleItem(sessionId, {
-          scheduleType: "Call Time",
-          title: chatResult.scheduledCall.title || "Follow-up Callback",
-          time: chatResult.scheduledCall.time,
-          duration: "15 min",
-          notes: "Scheduled by care coordinator",
-          dateNumber: new Date(scheduleDate).getDate().toString(),
-          dayLabel: new Date(scheduleDate).toLocaleDateString('en-US', { weekday: 'short' }),
-          tone: "warning",
-          scheduleDate: scheduleDate
+
+        const ocrSystemMsg = `[OCR Text Extracted: ${ocrText}]`;
+        await addUiMessage({
+          sessionId,
+          role: "user",
+          content: ocrSystemMsg
         });
-        
-        bgAnalysis.actions.push("schedule_call_created");
+
+        const updatedChatMessages: BgPromptMessage[] = [...chatMessages, { role: "user", content: ocrSystemMsg }];
+        const secondChatResult = await runChatAgent({
+          sessionId,
+          model,
+          memoryContext,
+          triageLevel: triage.level,
+          emergencySignal,
+          messages: updatedChatMessages,
+          transferDecision: transferDecision.decision,
+          transferReason: transferDecision.reason,
+          bgActions: [...bgAnalysis.actions, "ocr_tool_executed"],
+          drugHints: bgAnalysis.drugHints,
+          dosingInsights: bgAnalysis.dosingInsights,
+          medicalReference
+        });
+
+        assistantText = secondChatResult.responseText;
+        bgAnalysis.actions.push("ocr_tool_executed");
       }
     } catch {
       assistantText = buildFallbackAssistantText({

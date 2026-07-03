@@ -22,11 +22,7 @@ function normalizeState(input: unknown): CareChatBrowserState | null {
   if (
     !state.profile ||
     !Array.isArray(state.chatMessages) ||
-    !Array.isArray(state.historyItems) ||
-    !Array.isArray(state.scheduleItems) ||
-    !Array.isArray(state.mediaImages) ||
-    !Array.isArray(state.mediaDocs) ||
-    !Array.isArray(state.mediaLinks)
+    !Array.isArray(state.historyItems)
   ) {
     return null;
   }

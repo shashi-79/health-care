@@ -1,5 +1,5 @@
 import { addUiMessage } from "@rhc/db";
-import { detectInputKind, transcribeAudio, describeImage } from "@rhc/ingest";
+import { detectInputKind, transcribeAudio, describeImage, performOcr } from "@rhc/ingest";
 import { NextRequest, NextResponse } from "next/server";
 
 type UploadBody = {
@@ -52,11 +52,16 @@ export async function POST(request: NextRequest) {
     }
   } else if (kind === "image" && typeof body.base64Image === "string" && body.base64Image.length > 0) {
     try {
-      const explicitPrompt = typeof body.text === "string" && body.text.trim().length > 0 
-        ? `User says: "${body.text.trim()}". Please evaluate this context alongside the image.`
-        : undefined;
-      const rawDescription = await describeImage(body.base64Image, mimeType ?? "image/jpeg", explicitPrompt);
-      transcript = `[Image Uploaded - Vision Context: ${rawDescription}] ${typeof body.text === "string" ? body.text.trim() : ""}`.trim();
+      if ((body as any).ocrOnly === true) {
+        const ocrText = await performOcr(body.base64Image, mimeType ?? "image/jpeg");
+        transcript = `[Image Uploaded - Vision Context: ${ocrText}]`.trim();
+      } else {
+        const explicitPrompt = typeof body.text === "string" && body.text.trim().length > 0 
+          ? `User says: "${body.text.trim()}". Please evaluate this context alongside the image.`
+          : undefined;
+        const rawDescription = await describeImage(body.base64Image, mimeType ?? "image/jpeg", explicitPrompt);
+        transcript = `[Image Uploaded - Vision Context: ${rawDescription}] ${typeof body.text === "string" ? body.text.trim() : ""}`.trim();
+      }
     } catch {
       warning = "Image analysis failed for this request.";
     }
@@ -64,8 +69,9 @@ export async function POST(request: NextRequest) {
 
   const normalizedText = typeof body.text === "string" ? body.text.trim() : "";
   const capturedText = transcript || normalizedText;
+  const ocrOnly = (body as any).ocrOnly === true;
 
-  if (capturedText.length > 0) {
+  if (capturedText.length > 0 && !ocrOnly) {
     addUiMessage({
       sessionId,
       role: "user",
