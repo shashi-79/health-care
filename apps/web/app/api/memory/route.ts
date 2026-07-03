@@ -44,8 +44,8 @@ function normalizeStringList(value: unknown): string[] | undefined {
 
 export async function GET(request: NextRequest) {
   const sessionId = normalizeSessionId(request.nextUrl.searchParams.get("sessionId"));
-  const memory = getSessionMemory(sessionId);
-  const uiMessages = listUiMessages(sessionId, 120);
+  const memory = await getSessionMemory(sessionId);
+  const uiMessages = await listUiMessages(sessionId, 120);
 
   const report = buildSessionReport({
     sessionId,
@@ -111,13 +111,13 @@ export async function PATCH(request: NextRequest) {
     patch.rootDetails = body.rootDetails;
   }
 
-  const memory = patchSessionMemory(sessionId, patch);
+  const memory = await patchSessionMemory(sessionId, patch);
 
   return NextResponse.json({
     ok: true,
     route: "/api/memory",
     sessionId,
     memory,
-    uiMessages: listUiMessages(sessionId, 120)
+    uiMessages: await listUiMessages(sessionId, 120)
   });
 }

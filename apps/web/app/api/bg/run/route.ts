@@ -6,8 +6,6 @@ import type { BgPromptMessage } from "@rhc/types";
 import type { LoopState } from "@rhc/agents";
 import { NextRequest, NextResponse } from "next/server";
 
-const DEFAULT_BG_MODEL = "anthropic/claude-haiku-4.5";
-
 type BgRunRequestBody = {
   sessionId?: string;
   query?: string;
@@ -59,13 +57,16 @@ export async function POST(request: NextRequest) {
   }
 
   const sessionId = normalizeSessionId(body.sessionId);
-  const model = process.env.BG_MODEL ?? DEFAULT_BG_MODEL;
+  const model = process.env.BG_MODEL;
+  if (!model) {
+    throw new Error("BG_MODEL is not defined in the environment.");
+  }
   const query = typeof body.query === "string" ? body.query.trim() : "";
 
-  const memory = getSessionMemory(sessionId);
+  const memory = await getSessionMemory(sessionId);
   const patientAge = normalizeNumeric(body.patientAge, 1, 120) ?? memory.rootDetails?.age;
   const patientWeightKg = normalizeNumeric(body.patientWeightKg, 1, 350) ?? memory.rootDetails?.weightKg;
-  const uiMessages = listUiMessages(sessionId, 40);
+  const uiMessages = await listUiMessages(sessionId, 40);
 
   const messages: BgPromptMessage[] = [
     {
@@ -96,7 +97,7 @@ export async function POST(request: NextRequest) {
 
   if (result.shouldStop) {
     const nextFlags = [...memory.riskFlags, "bg_loop_guard_stop"];
-    patchSessionMemory(sessionId, { riskFlags: [...new Set(nextFlags)] });
+    await patchSessionMemory(sessionId, { riskFlags: [...new Set(nextFlags)] });
   }
 
   logEvent({

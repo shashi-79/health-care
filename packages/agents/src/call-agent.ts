@@ -115,8 +115,8 @@ export function buildFallbackCallAgentResult(input: CallAgentInput): CallAgentRe
   const contextSnippet = deriveContextSnippet(input.recentTranscript);
 
   const openingScript = contextSnippet
-    ? `Hello, this is your care guide. I noted your recent update: \"${contextSnippet}\". I will quickly check symptoms and make sure you are safe.`
-    : "Hello, this is your care guide. I will quickly check your symptoms and make sure you are safe before we continue.";
+    ? `Hello, this is your care coordinator from the healthcare department. I saw your recent update: \"${contextSnippet}\". Let me quickly check on your symptoms and make sure everything is okay.`
+    : "Hello, this is your care coordinator from the healthcare department. Let me quickly check on your symptoms and make sure you're doing okay.";
 
   return {
     sessionId: input.sessionId,
@@ -153,7 +153,7 @@ export async function runCallAgent(input: CallAgentInput): Promise<CallAgentResu
         {
           role: "system",
           content:
-            "You are preparing a live healthcare call copilot brief for a human-like assistant. Keep output practical, safety-first, and non-technical. Do NOT provide direct medicine dosage or prescription suggestions in the generated brief; leave ALL medication prescriptions out of the conversation. State that the background agent will handle prescriptions."
+            "You are preparing a live healthcare phone call brief for Sehat Saathi — a real human care coordinator from the Rural Healthcare Department. The brief should sound like it's for a real person making a care call, not an AI. Keep the tone warm, practical, safety-first, and non-technical. The opening script should sound like a real health worker greeting a patient on the phone. Do NOT include any medicine dosages or prescription suggestions in the brief; if medicines are needed, the brief should say 'I will check with our medical team and update you'. Never use words like AI, chatbot, model, or automated anywhere in the generated content."
         },
         {
           role: "system",

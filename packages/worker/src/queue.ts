@@ -1,118 +1,103 @@
-import { Queue, QueueEvents } from "bullmq";
-
-export const BG_ANALYSIS_QUEUE_NAME = "bg-analysis";
-
-type ConnectionConfig = {
-  host: string;
-  port: number;
-  maxRetriesPerRequest: null;
-  enableOfflineQueue: boolean;
-  connectTimeout: number;
-  lazyConnect: boolean;
-  retryStrategy: (times: number) => number | null;
-};
-
-function buildConnection(): ConnectionConfig {
-  return {
-    host: process.env.REDIS_HOST ?? "localhost",
-    port: Number(process.env.REDIS_PORT ?? 6379),
-    maxRetriesPerRequest: null,
-    enableOfflineQueue: false,
-    connectTimeout: 1_500,
-    lazyConnect: true,
-    // After 3 retries give up so we fall back to inline execution.
-    retryStrategy: (times: number) => (times > 3 ? null : Math.min(times * 200, 1_000))
-  };
-}
-
-let cachedQueue: Queue | null = null;
-let queueDisabledReason: string | null = null;
-
-function resolveQueue(): Queue | null {
-  if (queueDisabledReason) return null;
-  if (cachedQueue) return cachedQueue;
-  if (process.env.DISABLE_BG_QUEUE === "1") {
-    queueDisabledReason = "disabled_via_env";
-    return null;
-  }
-  try {
-    cachedQueue = new Queue(BG_ANALYSIS_QUEUE_NAME, {
-      connection: buildConnection()
-    });
-
-    // Swallow connection errors so Next.js route handlers don't crash.
-    cachedQueue.on("error", (error) => {
-      if (process.env.DEBUG_BG_QUEUE === "1") {
-        console.warn("[bg-analysis queue] error:", (error as Error)?.message ?? error);
-      }
-    });
-
-    return cachedQueue;
-  } catch (error) {
-    queueDisabledReason = `init_failed:${(error as Error)?.message ?? String(error)}`;
-    return null;
-  }
-}
-
-export const bgAnalysisQueue: Queue | null = (() => {
-  try {
-    return resolveQueue();
-  } catch {
-    return null;
-  }
-})();
+import { runBgAgent } from "@rhc/agents";
+import { addUiMessage } from "@rhc/db";
+import { logEvent } from "@rhc/obs";
+import { patchSessionMemory } from "@rhc/rag";
+import { applyAssistantGuardrails } from "@rhc/safety";
 
 export type BgAnalysisJobData = {
   sessionId: string;
   bgModel: string;
   bgMessages: Array<{ role: string; content: string }>;
   userText: string;
-  memoryBefore: unknown;
+  memoryBefore: any;
 };
 
 export type EnqueueResult =
   | { queued: true; jobId: string | undefined }
   | { queued: false; reason: string };
 
-/**
- * Attempt to enqueue a background analysis job. Never throws — returns a
- * result object so the caller can decide how to degrade (e.g. run inline).
- */
 export async function enqueueBgAnalysis(data: BgAnalysisJobData): Promise<EnqueueResult> {
-  const queue = resolveQueue();
-  if (!queue) {
-    return { queued: false, reason: queueDisabledReason ?? "queue_unavailable" };
-  }
-  try {
-    const job = await Promise.race([
-      queue.add("bg-analysis", data, {
-        removeOnComplete: true,
-        removeOnFail: true,
-        attempts: 2
-      }),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("enqueue_timeout")), 2_000)
-      )
-    ]);
-    return { queued: true, jobId: (job as { id?: string }).id };
-  } catch (error) {
-    const reason = (error as Error)?.message ?? String(error);
-    if (reason.includes("ECONNREFUSED") || reason.includes("enqueue_timeout")) {
-      queueDisabledReason = `redis_unreachable:${reason}`;
+  const { sessionId, bgModel, bgMessages, userText, memoryBefore } = data;
+
+  // Execute in the background asynchronously using setTimeout to not block the request thread.
+  setTimeout(async () => {
+    try {
+      logEvent({
+        category: "worker",
+        action: "bg_analysis_started",
+        level: "info",
+        sessionId,
+        details: { bgModel, userText }
+      });
+
+      const bgResult = (await runBgAgent({
+        sessionId,
+        model: bgModel,
+        messages: bgMessages,
+        query: userText,
+        enableTools: true
+      } as any)) as any;
+
+      let medicalReference: string | undefined;
+      if (bgResult.drugHints && bgResult.drugHints.length > 0) {
+        medicalReference = `For non-critical symptom support, FDA label references suggest these general-use medicine options: ${bgResult.drugHints.join(", ")}. Mention as options only and advise clinician confirmation.`;
+      }
+
+      if (bgResult.dosingInsights && bgResult.dosingInsights.length > 0) {
+        const conciseDosing = bgResult.dosingInsights.slice(0, 2).join(" | ");
+        medicalReference = `${medicalReference ?? ""} BG dosing review: ${conciseDosing}`.trim();
+      }
+
+      const assistantText = medicalReference ?? "Background analysis complete. What are your current symptoms?";
+      const safetyReview = applyAssistantGuardrails(assistantText);
+
+      addUiMessage({
+        sessionId,
+        role: "assistant",
+        content: safetyReview.text
+      });
+
+      const existingFlags = (memoryBefore && typeof memoryBefore === "object" && "riskFlags" in memoryBefore && Array.isArray(memoryBefore.riskFlags))
+        ? memoryBefore.riskFlags
+        : [];
+
+      await patchSessionMemory(sessionId, {
+        riskFlags: [...existingFlags, ...(bgResult.shouldStop ? ["bg_loop_guard_stop"] : [])]
+      });
+
+      logEvent({
+        category: "worker",
+        action: "bg_analysis_complete",
+        level: "info",
+        sessionId,
+        details: {
+          ...bgResult
+        }
+      });
+    } catch (err: any) {
+      console.error(`Background analysis job failed: ${err.message}`);
+      logEvent({
+        category: "worker",
+        action: "bg_analysis_failed",
+        level: "error",
+        sessionId,
+        details: {
+          error: err.message
+        }
+      });
     }
-    return { queued: false, reason };
-  }
+  }, 10);
+
+  return { queued: true, jobId: "inprocess-" + Date.now() };
 }
 
 export function getQueueEvents() {
-  if (!resolveQueue()) return null;
-  try {
-    return new QueueEvents(BG_ANALYSIS_QUEUE_NAME, { connection: buildConnection() });
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export function isBgQueueAvailable(): boolean {
-  return resolveQueue() !== null;
+  return true;
 }
+
+export const bgAnalysisQueue = null;
+export const BG_ANALYSIS_QUEUE_NAME = "bg-analysis";

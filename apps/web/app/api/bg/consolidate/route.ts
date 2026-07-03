@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
   const symptoms = extractSymptoms(transcript);
   const triage = classifySymptoms(symptoms.length > 0 ? symptoms : [transcript]);
-  const memoryBefore = getSessionMemory(sessionId);
+  const memoryBefore = await getSessionMemory(sessionId);
 
   const summary = transcript.replace(/\s+/g, " ").slice(0, 600);
   const riskFlags = [...memoryBefore.riskFlags];
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     riskFlags.push("transcript_emergency_signal");
   }
 
-  const updatedMemory = patchSessionMemory(sessionId, {
+  const updatedMemory = await patchSessionMemory(sessionId, {
     currentIllness: summary,
     pastIllnesses: unique([...memoryBefore.pastIllnesses, summary]).slice(-10),
     riskFlags: unique(riskFlags)

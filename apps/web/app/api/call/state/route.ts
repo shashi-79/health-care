@@ -21,7 +21,7 @@ export async function GET(request: NextRequest) {
     ok: true,
     route: "/api/call/state",
     sessionId,
-    call: getCallState(sessionId)
+    call: await getCallState(sessionId)
   });
 }
 
@@ -64,18 +64,16 @@ export async function POST(request: NextRequest) {
       ok: true,
       route: "/api/call/state",
       sessionId,
-      call: startOutgoingCall(sessionId, contactName)
+      call: await startOutgoingCall(sessionId, contactName)
     });
   }
-
-
 
   if (action === "accept") {
     return NextResponse.json({
       ok: true,
       route: "/api/call/state",
       sessionId,
-      call: acceptCall(sessionId)
+      call: await acceptCall(sessionId)
     });
   }
 
@@ -84,7 +82,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       route: "/api/call/state",
       sessionId,
-      call: endCall(sessionId)
+      call: await endCall(sessionId)
     });
   }
 
@@ -92,6 +90,6 @@ export async function POST(request: NextRequest) {
     ok: true,
     route: "/api/call/state",
     sessionId,
-    call: clearCallState(sessionId)
+    call: await clearCallState(sessionId)
   });
 }

@@ -15,9 +15,6 @@ import { enqueueBgAnalysis } from "@rhc/worker";
 import { addScheduleItem } from "../care/store";
 import { NextRequest, NextResponse } from "next/server";
 
-const DEFAULT_CHAT_MODEL = "openai/gpt-4o-mini";
-const DEFAULT_BG_MODEL = "anthropic/claude-haiku-4.5";
-
 type ChatRequestBody = {
   sessionId?: string;
   text?: string;
@@ -70,20 +67,25 @@ function buildFallbackAssistantText(input: {
   symptoms: string[];
   triageLevel: "mild" | "moderate" | "emergency";
 }) {
-  const briefUserText = input.userText.replace(/\s+/g, " ").trim().slice(0, 90);
+  const lower = input.userText.toLowerCase().trim();
+  const isGreeting = /^(hi|hello|hey|good\s*morning|good\s*afternoon|good\s*evening|namaste)\b/i.test(lower);
   const symptomText = input.symptoms.length > 0 ? ` Symptoms tracked: ${input.symptoms.join(", ")}.` : "";
 
   if (input.emergencySignal) {
-    return `Your symptoms may need urgent in-person care. Please contact local emergency services or go to the nearest hospital now.${symptomText}`;
+    return `I'm very concerned about these symptoms. Please go to the nearest hospital or contact local emergency services right away. Your safety is our top priority.${symptomText}`;
   }
 
-  const referenceText = input.medicalReference ? ` ${input.medicalReference}` : "";
+  if (isGreeting || (!input.userText && input.symptoms.length === 0)) {
+    return `Hello! I'm your care coordinator from the healthcare department. How are you feeling today? Please let me know how I can help you.`;
+  }
+
+  const referenceText = input.medicalReference ? ` Let me check this: ${input.medicalReference}` : "";
 
   if (input.triageLevel === "moderate") {
-    return `I noted your update${briefUserText ? `: "${briefUserText}"` : ""}. Please rest, hydrate, and monitor symptom progression today. If you develop breathing trouble, chest pain, or worsening fever, seek in-person care promptly.${symptomText}${referenceText}`;
+    return `I understand you're not feeling well. Please make sure to rest and stay well hydrated today. Keep a close eye on how you feel. If you start having any breathing trouble, chest pain, or if your fever gets worse, please let us know or see a doctor in person right away.${symptomText}${referenceText}`;
   }
 
-  return `I noted your update${briefUserText ? `: "${briefUserText}"` : ""}. Continue hydration and routine care, and share if symptoms persist or worsen so I can guide next steps.${symptomText}${referenceText}`;
+  return `Thank you for sharing that with me. I've noted down your details. Please rest, drink plenty of fluids, and let me know if anything changes or if you feel worse. We are here to help you.${symptomText}${referenceText}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -103,7 +105,10 @@ export async function POST(request: NextRequest) {
   }
 
   const sessionId = normalizeSessionId(body.sessionId);
-  const model = process.env.CHAT_MODEL ?? DEFAULT_CHAT_MODEL;
+  const model = process.env.CHAT_MODEL;
+  if (!model) {
+    throw new Error("CHAT_MODEL is not defined in the environment.");
+  }
   assertChatModel(model);
 
   const userText = typeof body.text === "string" ? body.text.trim() : "";
@@ -125,14 +130,17 @@ export async function POST(request: NextRequest) {
   const emergencySignal = triage.level === "emergency" || containsEmergencySignal(userText);
 
   if (userText) {
-    addUiMessage({
+    await addUiMessage({
       sessionId,
       role: "user",
       content: userText
     });
   }
 
-  const memoryBefore = getSessionMemory(sessionId);
+  const [memoryBefore, priorMessages] = await Promise.all([
+    getSessionMemory(sessionId),
+    listUiMessages(sessionId, 20)
+  ]);
   const memoryContext = buildMemoryContext(memoryBefore, 1_600);
   const transferInputText = userText || `Symptoms: ${symptoms.join(", ")}`;
   const transferDecision = await runChatTransferAgent({
@@ -186,20 +194,18 @@ export async function POST(request: NextRequest) {
   const shouldRunBgAnalysis = !emergencySignal && transferDecision.decision === "transfer_to_bg";
 
   if (shouldRunBgAnalysis) {
-    const bgModel = process.env.BG_MODEL ?? DEFAULT_BG_MODEL;
-    const uiMessages = listUiMessages(sessionId, 20);
+    const bgModel = process.env.BG_MODEL;
+    if (!bgModel) {
+      throw new Error("BG_MODEL is not defined in the environment.");
+    }
 
     const bgMessages: BgPromptMessage[] = [
       {
         role: "system",
-        content: "You are a healthcare background analysis assistant. Focus on short, safe clinical planning notes."
+        content: "You are a background clinical support analyst at the Rural Healthcare Department. Provide short, safe clinical planning notes to help the care coordinator (Sehat Saathi) assist patients. Never reference AI or automated systems in your output."
       },
-      ...uiMessages.map((message) => ({ role: message.role, content: message.content }))
+      ...priorMessages.map((message) => ({ role: message.role, content: message.content }))
     ];
-
-    if (userText.length > 0) {
-      bgMessages.push({ role: "user", content: userText });
-    }
 
     const enqueueResult = await enqueueBgAnalysis({
       sessionId,
@@ -262,7 +268,6 @@ export async function POST(request: NextRequest) {
   }
 
   const chatMessages: BgPromptMessage[] = [];
-  const priorMessages = listUiMessages(sessionId, 20);
 
   for (const message of priorMessages) {
     chatMessages.push({ role: message.role, content: message.content });
@@ -283,7 +288,7 @@ export async function POST(request: NextRequest) {
     safetyInterventions.push("emergency_escalation_template");
     riskFlags.push("emergency_escalation_template");
   } else if (shouldRunBgAnalysis) {
-    assistantText = medicalReference || "Analyzing your medical profile and cross-referencing FDA databases. Please wait...";
+    assistantText = medicalReference || "I'm looking into your medical details and checking our records. Give me just a moment...";
     usedChatAgent = false;
   } else {
     try {
@@ -318,7 +323,7 @@ export async function POST(request: NextRequest) {
           title: chatResult.scheduledCall.title || "Follow-up Callback",
           time: chatResult.scheduledCall.time,
           duration: "15 min",
-          notes: "Scheduled autonomously by AI",
+          notes: "Scheduled by care coordinator",
           dateNumber: new Date(scheduleDate).getDate().toString(),
           dayLabel: new Date(scheduleDate).toLocaleDateString('en-US', { weekday: 'short' }),
           tone: "warning",
@@ -353,7 +358,7 @@ export async function POST(request: NextRequest) {
     content: assistantText
   });
 
-  const updatedMemory = patchSessionMemory(sessionId, {
+  const updatedMemory = await patchSessionMemory(sessionId, {
     currentIllness: userText || memoryBefore.currentIllness,
     pastIllnesses: userText
       ? unique([...memoryBefore.pastIllnesses, userText]).slice(-10)
@@ -428,7 +433,7 @@ export async function POST(request: NextRequest) {
       triageRouteDecision
     },
     memory: updatedMemory,
-    uiMessageCount: listUiMessages(sessionId).length
+    uiMessageCount: (await listUiMessages(sessionId)).length
   });
 }
 
@@ -437,7 +442,7 @@ export async function GET(request: NextRequest) {
   const limitStr = request.nextUrl.searchParams.get("limit");
   const limit = limitStr ? parseInt(limitStr, 10) : 120;
   
-  const messages = listUiMessages(sessionId, limit);
+  const messages = await listUiMessages(sessionId, limit);
   
   return NextResponse.json({
     ok: true,
@@ -449,7 +454,7 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   const sessionId = request.nextUrl.searchParams.get("sessionId") ?? "default";
   
-  clearUiMessages(sessionId);
+  await clearUiMessages(sessionId);
   logEvent({ category: "chat", action: "history_cleared", sessionId, details: {} });
   
   return NextResponse.json({

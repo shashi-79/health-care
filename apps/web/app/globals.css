@@ -1645,3 +1645,112 @@ body {
     max-width: 520px;
   }
 }
+
+.profile-edit-input {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-light);
+  color: var(--text-main);
+  outline: none;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+
+.profile-edit-input:focus {
+  border-color: var(--primary);
+  background-color: #ffffff;
+}
+
+.profile-edit-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 15px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--bg-light);
+  color: var(--text-main);
+  outline: none;
+  margin-top: 4px;
+  resize: vertical;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.profile-edit-textarea:focus {
+  border-color: var(--primary);
+  background-color: #ffffff;
+}
+
+.profile-hero-avatar {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+/* Active Call Top Bar Indicator */
+.active-call-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #ffffff;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  z-index: 35;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 72px);
+  width: 100%;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+}
+
+.active-call-bar:hover {
+  background: linear-gradient(135deg, #059669, #047857);
+}
+
+.active-call-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pulse-dot {
+  width: 8px;
+  height: 8px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  animation: pulse-animation 1.5s infinite;
+}
+
+@keyframes pulse-animation {
+  0% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.7);
+  }
+  70% {
+    transform: scale(1.1);
+    box-shadow: 0 0 0 8px rgba(255, 255, 255, 0);
+  }
+  100% {
+    transform: scale(0.9);
+    box-shadow: 0 0 0 0 rgba(255, 255, 255, 0);
+  }
+}
+
+.tap-return-text {
+  font-size: 11px;
+  opacity: 0.85;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.chat-canvas.has-active-call-bar {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 142px);
+}
+

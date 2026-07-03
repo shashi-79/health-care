@@ -1,4 +1,4 @@
-import { getOpenRouterClient } from "@rhc/ai";
+import { getOpenRouterClient, getGeminiClient } from "@rhc/ai";
 
 const DEFAULT_IMAGE_ANALYZE_TIMEOUT_MS = Number(process.env.IMAGE_ANALYZE_TIMEOUT_MS ?? 12000);
 
@@ -23,12 +23,34 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
 }
 
 export async function describeImage(base64Image: string, mimeType: string, customPrompt?: string) {
-  const openrouter = getOpenRouterClient();
+  const modelName = process.env.VISION_MODEL || "openai/gpt-4o-mini";
   const prompt = customPrompt || "Analyze this image from a rural healthcare patient. Describe any visible symptoms, documents, or context concisely.";
-  
+
+  if (modelName.toLowerCase().includes("gemini")) {
+    const ai = getGeminiClient();
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: modelName,
+        contents: [
+          { text: prompt },
+          {
+            inlineData: {
+              data: base64Image,
+              mimeType
+            }
+          }
+        ]
+      }),
+      DEFAULT_IMAGE_ANALYZE_TIMEOUT_MS,
+      `Image analysis timed out after ${DEFAULT_IMAGE_ANALYZE_TIMEOUT_MS}ms`
+    );
+    return response.text?.trim() ?? "";
+  }
+
+  const openrouter = getOpenRouterClient();
   const completion = await withTimeout(
     openrouter.chat.completions.create({
-      model: process.env.VISION_MODEL || "openai/gpt-4o-mini",
+      model: modelName,
       messages: [
         {
           role: "user",

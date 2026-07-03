@@ -57,11 +57,6 @@ type ApiChatResponse = {
   };
 };
 
-type ApiChatHistoryResponse = {
-  ok: boolean;
-  messages?: UiMessage[];
-};
-
 type ApiHistoryResponse = {
   ok: boolean;
   history?: HistoryItem[];
@@ -168,7 +163,7 @@ function scheduleToneFromType(scheduleType: string): ScheduleTone {
 
 function extractDocumentTitle(messages: ChatMessage[], fallbackTitle: string) {
   const docMessage = messages.find((message) => message.kind === "doc");
-  if (docMessage && docMessage.fileName.trim().length > 0) {
+  if (docMessage && docMessage.kind === "doc" && docMessage.fileName.trim().length > 0) {
     return docMessage.fileName;
   }
 
@@ -211,6 +206,7 @@ export function useCareChatController() {
   const [chatMenuOpen, setChatMenuOpen] = useState(false);
   const [attachSheetOpen, setAttachSheetOpen] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [searchText, setSearchText] = useState("");
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [addScheduleOpen, setAddScheduleOpen] = useState(false);
   const [mediaTab, setMediaTab] = useState<MediaTab>("media");
@@ -246,6 +242,8 @@ export function useCareChatController() {
   const [callDirection, setCallDirection] = useState<"incoming" | "outgoing" | null>(null);
   const [isMicMuted, setIsMicMuted] = useState(false);
   const [isSpeakerEnabled, setIsSpeakerEnabled] = useState(true);
+  const [isCallOnHold, setIsCallOnHold] = useState(false);
+  const isCallOnHoldRef = useRef(false);
   const [micPermissionState, setMicPermissionState] = useState<MicPermissionState>("unknown");
 
   const [toastText, setToastText] = useState("Action completed");
@@ -271,10 +269,23 @@ export function useCareChatController() {
   const firedScheduleIdsRef = useRef<Set<number>>(new Set());
 
   const isChatView = activeView === "chat";
+  const isCallConnected = callStatus !== "Idle" && callStatus !== "Call ended" && callStatus !== "Missed call";
 
   const voiceSendIcon = useMemo(() => {
     return messageText.trim().length > 0 ? ">" : "M";
   }, [messageText]);
+
+  const filteredChatMessages = useMemo(() => {
+    if (!searchText.trim()) return chatMessages;
+    const term = searchText.toLowerCase();
+    return chatMessages.filter(
+      (m) =>
+        (m.kind === "text" && m.text.toLowerCase().includes(term)) ||
+        (m.kind === "doc" && m.kind === "doc" && m.fileName.toLowerCase().includes(term)) ||
+        (m.kind === "image" && m.caption?.toLowerCase().includes(term)) ||
+        (m.kind === "system" && m.text.toLowerCase().includes(term))
+    );
+  }, [chatMessages, searchText]);
 
   const groupedSchedules = useMemo<GroupedSchedules[]>(() => {
     const map = new Map<string, GroupedSchedules>();
@@ -492,7 +503,30 @@ export function useCareChatController() {
   function toggleSpeaker() {
     const nextEnabled = !isSpeakerEnabled;
     setIsSpeakerEnabled(nextEnabled);
+    if (geminiAudioRef.current) {
+      geminiAudioRef.current.setSpeakerMuted(!nextEnabled || isCallOnHold);
+    }
     showToast(nextEnabled ? "Speaker on" : "Speaker off");
+  }
+
+  function toggleCallHold() {
+    const nextHold = !isCallOnHold;
+    setIsCallOnHold(nextHold);
+    isCallOnHoldRef.current = nextHold;
+
+    applyMicMutedState(isMicMuted || nextHold);
+
+    if (geminiAudioRef.current) {
+      geminiAudioRef.current.setSpeakerMuted(!isSpeakerEnabled || nextHold);
+    }
+
+    if (nextHold) {
+      setCallStatus("On Hold");
+      showToast("Call placed on hold");
+    } else {
+      setCallStatus(formatCallDuration(callDurationSeconds));
+      showToast("Call resumed");
+    }
   }
 
   function applyServerCallState(call: ApiCallState) {
@@ -502,6 +536,8 @@ export function useCareChatController() {
       isRingingRef.current = true;
       setIsMicMuted(false);
       setIsSpeakerEnabled(true);
+      setIsCallOnHold(false);
+      isCallOnHoldRef.current = false;
       setMicPermissionState("unknown");
       micPermissionStateRef.current = "unknown";
       setCallDurationSeconds(0);
@@ -531,6 +567,7 @@ export function useCareChatController() {
               const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
               const callModel = process.env.NEXT_PUBLIC_CALL_MODEL || "gemini-2.5-flash-native-audio-preview-12-2025";
               geminiAudioRef.current = new GeminiLiveAudio(apiKey, callModel);
+              geminiAudioRef.current.setSpeakerMuted(!isSpeakerEnabled || isCallOnHold);
               void geminiAudioRef.current.startStream(
                 localMicStreamRef.current,
                 () => {
@@ -683,7 +720,13 @@ export function useCareChatController() {
   }
 
   async function syncChatMessagesFromServer(nextSessionId: string) {
-    const response = await requestJson<ApiChatHistoryResponse>(
+    type ApiChatMessagesGetResponse = {
+      ok: boolean;
+      sessionId: string;
+      messages: UiMessage[];
+    };
+
+    const response = await requestJson<ApiChatMessagesGetResponse>(
       `/api/chat?sessionId=${encodeURIComponent(nextSessionId)}`
     );
 
@@ -691,7 +734,7 @@ export function useCareChatController() {
       return;
     }
 
-    const messages = response.messages.map((msg, i: number) => {
+    const messages = response.messages.map((msg: UiMessage, i: number): ChatMessage => {
       let messageTime = "Recent";
       if (msg.createdAt) {
         try {
@@ -706,7 +749,7 @@ export function useCareChatController() {
         role: msg.role === "user" ? "patient" : "bot",
         text: msg.content,
         time: messageTime
-      } as ChatMessage;
+      };
     });
 
     if (messages.length > 0) {
@@ -804,6 +847,14 @@ export function useCareChatController() {
     showToast("Document Sent");
   }
 
+  function updateContactProfile(profile: Partial<ContactProfile>) {
+    setContactProfile((prev) => {
+      const next = { ...prev, ...profile };
+      return next;
+    });
+    showToast("Profile updated successfully");
+  }
+
   function notifyUpload(kind: string, file: File) {
     void requestJson("/api/ingest/upload", {
       method: "POST",
@@ -892,7 +943,9 @@ export function useCareChatController() {
     callTimerRef.current = window.setInterval(() => {
       setCallDurationSeconds((prev) => {
         const next = prev + 1;
-        setCallStatus(formatCallDuration(next));
+        if (!isCallOnHoldRef.current) {
+          setCallStatus(formatCallDuration(next));
+        }
         return next;
       });
     }, 1000);
@@ -931,8 +984,8 @@ export function useCareChatController() {
   }
 
   function startCall() {
-    if (callStatus === "Calling..." || callStatus === "Incoming..." || !isNaN(Number(callDurationSeconds)) && callDurationSeconds > 0 || isRingingRef.current) {
-      showToast("Cannot start call. A call is already active.");
+    if (isCallConnected) {
+      switchView("calling");
       return;
     }
 
@@ -942,6 +995,8 @@ export function useCareChatController() {
     isRingingRef.current = true;
     setIsMicMuted(false);
     setIsSpeakerEnabled(true);
+    setIsCallOnHold(false);
+    isCallOnHoldRef.current = false;
     setMicPermissionState("unknown");
     micPermissionStateRef.current = "unknown";
     setCallDirection("outgoing");
@@ -1060,6 +1115,8 @@ export function useCareChatController() {
     stopMicAudioSession();
     setCallDirection(null);
     setCallDurationSeconds(0);
+    setIsCallOnHold(false);
+    isCallOnHoldRef.current = false;
     switchView("chat");
   }
 
@@ -1440,9 +1497,15 @@ export function useCareChatController() {
 
     void syncCareDataFromServer(sessionId);
 
-    const pollId = window.setInterval(() => {
-      void syncCareDataFromServer(sessionId);
-    }, 8000);
+    const callPollId = window.setInterval(() => {
+      void syncCallStateFromServer(sessionId);
+    }, 4000);
+
+    const carePollId = window.setInterval(() => {
+      void syncHistoryFromServer(sessionId);
+      void syncSchedulesFromServer(sessionId);
+      void syncChatMessagesFromServer(sessionId);
+    }, 24000);
 
     function handleFocus() {
       void syncCareDataFromServer(sessionId);
@@ -1458,7 +1521,8 @@ export function useCareChatController() {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      window.clearInterval(pollId);
+      window.clearInterval(callPollId);
+      window.clearInterval(carePollId);
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
@@ -1672,6 +1736,8 @@ export function useCareChatController() {
     cameraCaptured,
     capturedImageBase64,
     chatMessages,
+    searchText,
+    filteredChatMessages,
     historyItems,
     selectionMode,
     selectedCallIds,
@@ -1689,6 +1755,8 @@ export function useCareChatController() {
     callDirection,
     isMicMuted,
     isSpeakerEnabled,
+    isCallOnHold,
+    isCallConnected,
     micPermissionState,
     isSyncing,
     toastText,
@@ -1697,6 +1765,7 @@ export function useCareChatController() {
     isChatView,
     voiceSendIcon,
     setShowSearch,
+    setSearchText,
     setCalendarOpen,
     setAddScheduleOpen,
     setMediaTab,
@@ -1705,6 +1774,7 @@ export function useCareChatController() {
     setChatMenuOpen,
     setAttachSheetOpen,
     setScheduleFormField,
+    switchView,
     closeOverlays,
     openDocument,
     openDocumentByName,
@@ -1713,6 +1783,7 @@ export function useCareChatController() {
     handlePrimaryCallAction,
     toggleMicrophone,
     toggleSpeaker,
+    toggleCallHold,
     generateCallLink,
     startCall,
     endCall,
@@ -1722,6 +1793,7 @@ export function useCareChatController() {
     sendCapturedImage,
     openHistory,
     closeHistory,
+    updateContactProfile,
     showProfile,
     closeProfile,
     showMedia,

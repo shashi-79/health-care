@@ -64,7 +64,12 @@ export function CallView({ vm }: CareChatViewProps) {
         </div>
       ) : (
         <div className="call-controls bottom-bar">
-          <button className="ctrl-btn" onClick={vm.handlePrimaryCallAction} type="button" aria-label="Hold call">
+          <button
+            className={`ctrl-btn ${vm.isCallOnHold ? "is-active" : ""}`}
+            onClick={vm.toggleCallHold}
+            type="button"
+            aria-label={vm.isCallOnHold ? "Resume call" : "Hold call"}
+          >
             <Pause />
           </button>
           <button

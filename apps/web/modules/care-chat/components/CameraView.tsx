@@ -3,7 +3,7 @@
 /* eslint-disable @next/next/no-img-element */
 
 import { RefreshCw, SendHorizontal, X, Zap } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CAPTURE_PREVIEW_URL } from "../constants";
 import type { CareChatViewProps } from "./viewTypes";
 import { handleImageError } from "./viewTypes";
@@ -11,20 +11,29 @@ import { handleImageError } from "./viewTypes";
 export function CameraView({ vm }: CareChatViewProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [hasMediaDevices, setHasMediaDevices] = useState(true);
+
+  useEffect(() => {
+    setHasMediaDevices(typeof navigator !== "undefined" && !!navigator.mediaDevices);
+  }, []);
 
   useEffect(() => {
     let activeStream: MediaStream | null = null;
 
     if (vm.activeView === "camera" && !vm.cameraCaptured) {
-      navigator.mediaDevices
-        .getUserMedia({ video: { facingMode: "environment" } })
-        .then((s) => {
-          activeStream = s;
-          if (videoRef.current) {
-            videoRef.current.srcObject = s;
-          }
-        })
-        .catch((err) => console.error("Camera permissions not granted or failed:", err));
+      if (typeof navigator !== "undefined" && navigator.mediaDevices) {
+        navigator.mediaDevices
+          .getUserMedia({ video: { facingMode: "environment" } })
+          .then((s) => {
+            activeStream = s;
+            if (videoRef.current) {
+              videoRef.current.srcObject = s;
+            }
+          })
+          .catch((err) => console.error("Camera permissions not granted or failed:", err));
+      } else {
+        console.error("Camera access requires a secure context (HTTPS/localhost).");
+      }
     }
 
     return () => {
@@ -78,6 +87,23 @@ export function CameraView({ vm }: CareChatViewProps) {
               className="w-full h-full object-cover" 
             />
             <canvas ref={canvasRef} className="hidden" />
+            {!hasMediaDevices && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center text-zinc-400 bg-zinc-950/95 z-20">
+                <p className="font-semibold text-lg text-white mb-2">Camera Unavailable</p>
+                <p className="text-sm max-w-xs mb-4">
+                  Camera access requires a Secure Context (HTTPS or localhost).
+                </p>
+                <div className="text-xs text-zinc-500 max-w-xs bg-zinc-900 p-3 rounded-lg border border-zinc-800">
+                  <p className="mb-2 font-medium text-zinc-400">To test on a mobile device/LAN:</p>
+                  <ol className="list-decimal pl-4 text-left space-y-1">
+                    <li>Open Chrome on your testing device</li>
+                    <li>Go to <code className="bg-zinc-800 px-1 py-0.5 rounded text-emerald-400 select-all font-mono">chrome://flags/#unsafely-treat-insecure-origin-as-secure</code></li>
+                    <li>Enable the flag and add <code className="bg-zinc-800 px-1 py-0.5 rounded text-emerald-400 font-mono">{typeof window !== "undefined" ? window.location.origin : "http://192.168.1.43:3000"}</code> into the text box</li>
+                    <li>Relaunch Chrome on the device</li>
+                  </ol>
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="image-preview absolute inset-0 z-0" id="image-preview">

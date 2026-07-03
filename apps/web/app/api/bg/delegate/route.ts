@@ -5,8 +5,6 @@ import { buildMemoryContext, getSessionMemory } from "@rhc/rag";
 import type { BgPromptMessage } from "@rhc/types";
 import { NextRequest, NextResponse } from "next/server";
 
-const DEFAULT_BG_MODEL = "anthropic/claude-haiku-4.5";
-
 type DelegateRequestBody = {
   sessionId?: string;
   query?: string;
@@ -62,11 +60,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const model = process.env.BG_MODEL ?? DEFAULT_BG_MODEL;
-  const memory = getSessionMemory(sessionId);
+  const model = process.env.BG_MODEL;
+  if (!model) {
+    throw new Error("BG_MODEL is not defined in the environment.");
+  }
+  const memory = await getSessionMemory(sessionId);
   const patientAge = normalizeNumeric(body.patientAge, 1, 120) ?? memory.rootDetails?.age;
   const patientWeightKg = normalizeNumeric(body.patientWeightKg, 1, 350) ?? memory.rootDetails?.weightKg;
-  const uiMessages = listUiMessages(sessionId, 20);
+  const uiMessages = await listUiMessages(sessionId, 20);
 
   const messages: BgPromptMessage[] = [
     {

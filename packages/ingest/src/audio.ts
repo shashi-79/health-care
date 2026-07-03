@@ -1,4 +1,4 @@
-import { getOpenRouterClient } from "@rhc/ai";
+import { getOpenRouterClient, getGeminiClient } from "@rhc/ai";
 
 const DEFAULT_AUDIO_TRANSCRIBE_TIMEOUT_MS = Number(process.env.AUDIO_TRANSCRIBE_TIMEOUT_MS ?? 5000);
 
@@ -23,10 +23,33 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
 }
 
 export async function transcribeAudio(base64Audio: string, format: "wav" | "mp3" | "ogg" = "wav") {
+  const modelName = process.env.AUDIO_TRANSCRIBE_MODEL || "openai/gpt-4o-audio-preview";
+
+  if (modelName.toLowerCase().includes("gemini")) {
+    const ai = getGeminiClient();
+    const response = await withTimeout(
+      ai.models.generateContent({
+        model: modelName,
+        contents: [
+          { text: "Transcribe this audio verbatim. Preserve original language." },
+          {
+            inlineData: {
+              data: base64Audio,
+              mimeType: `audio/${format}`
+            }
+          }
+        ]
+      }),
+      DEFAULT_AUDIO_TRANSCRIBE_TIMEOUT_MS,
+      `Audio transcription timed out after ${DEFAULT_AUDIO_TRANSCRIBE_TIMEOUT_MS}ms`
+    );
+    return response.text ?? "";
+  }
+
   const openrouter = getOpenRouterClient();
   const completion = await withTimeout(
     openrouter.chat.completions.create({
-      model: process.env.AUDIO_TRANSCRIBE_MODEL || "openai/gpt-4o-audio-preview",
+      model: modelName,
       messages: [
         {
           role: "user",

@@ -43,31 +43,29 @@ export async function POST(request: NextRequest) {
   const createdJobs = [];
 
   if (body.job && isJobType(body.job.type)) {
-    createdJobs.push(
-      scheduleJob({
-        sessionId,
-        type: body.job.type,
-        runAt: body.job.runAt,
-        payload: body.job.payload
-      })
-    );
+    const job = await scheduleJob({
+      sessionId,
+      type: body.job.type,
+      runAt: body.job.runAt,
+      payload: body.job.payload
+    });
+    createdJobs.push(job);
   }
 
   if (Array.isArray(body.jobs)) {
     for (const job of body.jobs) {
       if (!isJobType(job?.type)) continue;
-      createdJobs.push(
-        scheduleJob({
-          sessionId,
-          type: job.type,
-          runAt: job.runAt,
-          payload: job.payload
-        })
-      );
+      const created = await scheduleJob({
+        sessionId,
+        type: job.type,
+        runAt: job.runAt,
+        payload: job.payload
+      });
+      createdJobs.push(created);
     }
   }
 
-  const executedJobs = runDueJobs(typeof body.nowMs === "number" ? body.nowMs : Date.now(), 25, sessionId);
+  const executedJobs = await runDueJobs(typeof body.nowMs === "number" ? body.nowMs : Date.now(), 25, sessionId);
 
   for (const job of executedJobs) {
     logEvent({
@@ -88,6 +86,6 @@ export async function POST(request: NextRequest) {
     sessionId,
     createdJobs,
     executedJobs,
-    queuedJobs: listScheduledJobs(sessionId).filter((job) => job.status === "queued")
+    queuedJobs: (await listScheduledJobs(sessionId)).filter((job) => job.status === "queued")
   });
 }

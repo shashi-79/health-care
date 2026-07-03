@@ -7,23 +7,18 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspace @rhc/web",
-    "worker": "npm run worker --workspace @rhc/web",
+    "dev": "npm run dev --workspace @rhc/web -- --hostname 0.0.0.0",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspace @rhc/web",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
-    "test:watch": "vitest",
-    "db:up": "docker compose up -d && echo \"Database is starting up. Please wait a few seconds before running migrations.\"",
-    "db:down": "docker compose down",
-    "db:migrate": "echo \"Run migrations with your chosen tool (Drizzle/Prisma).\""
+    "test:watch": "vitest"
   },
   "devDependencies": {
-    "typescript": "6.0.3",
+    "typescript": "5.4.5",
     "vitest": "4.1.4"
   },
   "overrides": {
-    "eslint": "9.39.1",
-    "typescript": "5.4.5"
+    "eslint": "9.39.1"
   }
 }

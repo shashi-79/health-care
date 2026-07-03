@@ -97,20 +97,43 @@ export function MainChatView({ vm }: CareChatViewProps) {
         </div>
 
         <div className="search-bar-container" id="search-bar-container">
-          <button className="icon-btn" onClick={() => vm.setShowSearch(false)} type="button">
+          <button className="icon-btn" onClick={() => { vm.setShowSearch(false); vm.setSearchText(""); }} type="button">
             <ArrowLeft />
           </button>
-          <input type="text" placeholder="Search..." id="search-input" className="search-input" />
-          <button className="icon-btn" onClick={() => vm.setShowSearch(false)} type="button">
+          <input
+            type="text"
+            placeholder="Search..."
+            id="search-input"
+            className="search-input"
+            value={vm.searchText}
+            onChange={(event) => vm.setSearchText(event.target.value)}
+          />
+          <button className="icon-btn" onClick={() => { vm.setShowSearch(false); vm.setSearchText(""); }} type="button">
             <X />
           </button>
         </div>
       </header>
 
-      <main className="chat-canvas" id="message-container">
+      {vm.isCallConnected && (
+        <div
+          className="active-call-bar"
+          onClick={() => vm.switchView("calling")}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => handleActionKeyDown(event, () => vm.switchView("calling"))}
+        >
+          <div className="active-call-content">
+            <span className="pulse-dot"></span>
+            <span>Ongoing Call with {vm.contactProfile.name} ({vm.callStatus})</span>
+          </div>
+          <span className="tap-return-text">Tap to return</span>
+        </div>
+      )}
+
+      <main className={`chat-canvas ${vm.isCallConnected ? "has-active-call-bar" : ""}`} id="message-container">
         {!vm.localDataReady ? <div className="message bot-msg system-msg">Loading local messages...</div> : null}
 
-        {vm.chatMessages.map((message) => {
+        {vm.filteredChatMessages.map((message) => {
           if (message.kind === "system") {
             return (
               <div key={message.id} className="message bot-msg system-msg">

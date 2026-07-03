@@ -10,6 +10,11 @@
     "clean": "rm -rf .turbo dist",
     "typecheck": "tsc -p tsconfig.json"
   },
+  "dependencies": {
+    "@rhc/ai": "*",
+    "@rhc/policy": "*",
+    "@rhc/types": "*"
+  },
   "devDependencies": {
     "tsup": "^8.0.2",
     "typescript": "^5.4.5"

@@ -9,7 +9,7 @@ This is a monorepo workspace powered by Node/NPM.
 - **`@rhc/web`**: The main Next.js web application encompassing the UI and Backend API.
 - **`@rhc/agents`**: The orchestration logic encapsulating the Chat Agent, Call Agent, and Background Medical Analysis Agent.
 - **`@rhc/tools`**: Shared utility logic for text and markdown display.
-- **Background Worker**: An asynchronous worker runner that processes medical analysis queries via the `BgAgent` out-of-band to prevent UI blocking.
+- **Background Worker**: An asynchronous worker that processes medical analysis queries via the `BgAgent` in-process to prevent UI blocking.
 
 ## Prerequisites
 
@@ -28,16 +28,6 @@ You need to configure the environment variables required by the various LLM clie
 
 ## 🚀 Running the Project
 
-Because this application relies on a decoupled architecture, you need to run **both** the Next.js web application and the Background Worker side-by-side.
-
-### 0. initial setup
-
-For database
-
-```
-npm run db:up
-```
-
 ### 1. Install Dependencies
 
 From the root of the repository, execute:
@@ -48,18 +38,10 @@ npm install
 
 ### 2. Start the Development Server
 
-This boots up the Next.js web application for the UI and standard `/api/chat` route:
+This boots up the Next.js web application for the UI and background queue runner:
 
 ```bash
 npm run dev
-```
-
-### 3. Start the Background Worker
-
-Open a **second terminal window** in the root directory and start the background processor. This handles intense medical FDA-lookups without blocking your voice calls or UI interactions:
-
-```bash
-npm run worker
 ```
 
 ## Available Scripts
@@ -67,7 +49,6 @@ npm run worker
 You can execute the following commands from the project root:
 
 - `npm run dev`: Starts the Next.js development server.
-- `npm run worker`: Starts the long-running worker queue for medical background analysis.
 - `npm run build`: Compiles all packages and workspaces to `/dist` and `/out`.
 - `npm run typecheck`: Runs typescript validation across the entire workspace.
 - `npm run lint`: Analyzes the `@rhc/web` workspace using ESLint.
@@ -75,4 +56,4 @@ You can execute the following commands from the project root:
 ## Workflow Integration Hints
 
 - **Audio Calls**: Use the Call logo in the Chat layout to test Gemini Live Voice features.
-- **Background Medical Fetching**: To observe FDA lookups, type out or say a symptom (like "headache"). The orchestrator automatically invokes the background worker to fetch precise low-dosage instructions directly into the chat while keeping your conversational stream intact.
+- **Background Medical Fetching**: To observe FDA lookups, type out or say a symptom (like "headache"). The orchestrator automatically invokes the background worker asynchronously to fetch precise low-dosage instructions directly into the chat while keeping your conversational stream intact.

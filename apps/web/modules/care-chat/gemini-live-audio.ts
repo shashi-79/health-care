@@ -32,7 +32,7 @@ ${B64_TABLE_CODE}
 class GeminiAudioProcessor extends AudioWorkletProcessor {
   constructor() {
     super();
-    this.bufferSize = 4096;
+    this.bufferSize = 1024;
     // Double-buffer ring: avoids per-flush allocation that causes GC pressure
     this.bufferA = new Float32Array(this.bufferSize);
     this.bufferB = new Float32Array(this.bufferSize);
@@ -102,6 +102,8 @@ export class GeminiLiveAudio {
   // Playback batching queue
   private playbackQueue: string[] = [];
   private playbackTimerId: number | null = null;
+  private gainNode: GainNode | null = null;
+  private isSpeakerMuted: boolean = false;
 
   constructor(apiKey: string, model?: string) {
     this.ai = new GoogleGenAI({ apiKey });
@@ -111,7 +113,8 @@ export class GeminiLiveAudio {
   async startStream(
     stream: MediaStream,
     onServerResponse?: (text: string) => void,
-    onToolCall?: (name: string, args: Record<string, unknown>) => void
+    onToolCall?: (name: string, args: Record<string, unknown>) => void,
+    openingScript?: string
   ) {
     this.isIntentionalDisconnect = false;
     this.inAudioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
@@ -120,6 +123,9 @@ export class GeminiLiveAudio {
     this.outAudioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
       sampleRate: 24000,
     });
+    this.gainNode = this.outAudioContext.createGain();
+    this.gainNode.gain.setValueAtTime(this.isSpeakerMuted ? 0 : 1, this.outAudioContext.currentTime);
+    this.gainNode.connect(this.outAudioContext.destination);
     this.nextPlayTime = 0;
     this.playbackQueue = [];
 
@@ -152,7 +158,7 @@ export class GeminiLiveAudio {
           }
         },
         systemInstruction: {
-          parts: [{ text: "You are a helpful rural healthcare assistant. Respond naturally in conversation. You must strictly speak and respond in the EXACT same language that the user is currently speaking to you in. Mirror their language dynamically. Keep responses concise and caring. VERY IMPORTANT: NEVER directly suggest or prescribe any medications or precise dosages yourself. If the user needs medicine recommendations, immediately call the 'request_prescription_info' tool so the background physician agent can provide the exact low-dosage suggestions." }]
+          parts: [{ text: "You are Sehat Saathi — a real human care coordinator working at the Rural Healthcare Department. You are NOT an AI, chatbot, virtual assistant, or language model. Never say or imply you are AI or automated. You are a trained healthcare worker talking to patients over a phone call as part of your daily job. Speak in a warm, natural, conversational human voice — like a caring nurse or community health worker would on a real phone call. Use short sentences, everyday words, and show genuine empathy. Say things like 'I understand what you're going through', 'Let me look into that for you', 'Don't worry, I'm right here'. You must strictly speak and respond in the EXACT same language the user is currently speaking. Mirror their language dynamically. Keep responses concise, caring, and human-sounding. Do not immediately refer the patient to a doctor for general or non-urgent symptoms; instead, ask clarifying questions to understand the condition better, just like a real healthcare worker on the phone would. Only refer to a doctor if the situation is genuinely critical (emergency red-flags) or if the medication needed is restricted or controlled. VERY IMPORTANT: NEVER directly suggest or prescribe any medications or dosages yourself. If the user needs medicine advice, immediately call the 'request_prescription_info' tool and tell them 'Let me check with our medical team and I'll update you shortly.'" }]
         },
         tools: [{
           functionDeclarations: [{
@@ -172,6 +178,21 @@ export class GeminiLiveAudio {
         onopen: () => {
            console.log("Live API opened");
            this.isSessionActive = true;
+           if (openingScript && this.sessionPromise) {
+             this.sessionPromise.then((session) => {
+               try {
+                 session.sendClientContent({
+                   turns: [{
+                     role: "user",
+                     parts: [{ text: `The call has connected. Please greet the patient now. Use this greeting script: "${openingScript}"` }]
+                   }],
+                   turnComplete: true
+                 });
+               } catch (e) {
+                 console.error("Error sending opening script:", e);
+               }
+             }).catch(() => {});
+           }
         },
         onclose: (e: CloseEvent) => {
           console.log("Gemini Live session closed", e.reason || "");
@@ -201,7 +222,7 @@ export class GeminiLiveAudio {
                 const args = call.args || {};
                 if (call.name === "request_prescription_info" && onToolCall) {
                    onToolCall(call.name, args);
-                   return { id: call.id, name: call.name, response: { status: "Background analysis requested successfully. Tell user they will receive a message." } };
+                   return { id: call.id, name: call.name, response: { status: "Request forwarded to our medical team successfully. Let the patient know they will receive an update shortly." } };
                 }
                 return { id: call.id, name: call.name, response: { status: "Unknown tool" } };
               });
@@ -366,7 +387,11 @@ export class GeminiLiveAudio {
 
       const source = this.outAudioContext.createBufferSource();
       source.buffer = audioBuffer;
-      source.connect(this.outAudioContext.destination);
+      if (this.gainNode) {
+        source.connect(this.gainNode);
+      } else {
+        source.connect(this.outAudioContext.destination);
+      }
 
       const currentTime = this.outAudioContext.currentTime;
       if (this.nextPlayTime < currentTime) {
@@ -376,6 +401,13 @@ export class GeminiLiveAudio {
       this.nextPlayTime += audioBuffer.duration;
     } catch (err) {
       console.error("Error playing batched audio", err);
+    }
+  }
+
+  setSpeakerMuted(muted: boolean) {
+    this.isSpeakerMuted = muted;
+    if (this.gainNode && this.outAudioContext) {
+      this.gainNode.gain.setValueAtTime(muted ? 0 : 1, this.outAudioContext.currentTime);
     }
   }
 
@@ -389,6 +421,10 @@ export class GeminiLiveAudio {
     this.flushPlaybackQueue();
     this.playbackQueue = [];
     
+    if (this.gainNode) {
+      this.gainNode.disconnect();
+      this.gainNode = null;
+    }
     if (this.workletNode) {
       this.workletNode.disconnect();
       this.workletNode.port.onmessage = null;

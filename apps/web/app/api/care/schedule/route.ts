@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
   const scheduledJob =
     runAt === null
       ? null
-      : scheduleJob({
+      : await scheduleJob({
           sessionId,
           type: resolveScheduleJobType(created.scheduleType),
           runAt,

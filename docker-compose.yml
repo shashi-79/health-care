@@ -1,26 +1,12 @@
 services:
-  postgres:
-    image: postgres:16-alpine
-    container_name: rhc-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: rhc
-      POSTGRES_USER: rhc
-      POSTGRES_PASSWORD: rhc
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    container_name: rhc-redis
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    container_name: rhc-nginx
     restart: unless-stopped
     ports:
-      - "6379:6379"
-    volumes:
-      - redisdata:/data
-
-volumes:
-  pgdata:
-  redisdata:
+      - "80:80"
+      - "443:443"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

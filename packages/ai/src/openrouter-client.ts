@@ -6,6 +6,14 @@ function resolveOpenRouterApiKey() {
   return process.env.OPENROUTER_API_KEY ?? process.env.OPENAI_API_KEY;
 }
 
+function resolveOpenRouterBaseUrl() {
+  const url = process.env.OPENROUTER_BASE_URL ?? process.env.OPENROUTER_SITE_URL;
+  if (!url) {
+    throw new Error("Neither OPENROUTER_BASE_URL nor OPENROUTER_SITE_URL is defined in the environment.");
+  }
+  return url;
+}
+
 export function getOpenRouterClient() {
   if (cachedOpenRouterClient) {
     return cachedOpenRouterClient;
@@ -17,7 +25,7 @@ export function getOpenRouterClient() {
   }
 
   cachedOpenRouterClient = new OpenAI({
-    baseURL: "https://openrouter.ai/api/v1",
+    baseURL: resolveOpenRouterBaseUrl(),
     apiKey,
     defaultHeaders: {
       "HTTP-Referer": process.env.OPENROUTER_SITE_URL ?? "",

@@ -5,13 +5,11 @@
 import {
   ArrowLeft,
   Link2,
-  MoreVertical,
   Phone,
   PhoneCall,
   PhoneIncoming,
   PhoneMissed,
   PhoneOutgoing,
-  Search,
   Trash2
 } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
@@ -26,14 +24,6 @@ export function HistoryView({ vm }: CareChatViewProps) {
             <ArrowLeft />
           </button>
           <h2>Calls</h2>
-        </div>
-        <div className="header-actions">
-          <button className="icon-btn text-white" type="button">
-            <Search />
-          </button>
-          <button className="icon-btn text-white" type="button">
-            <MoreVertical />
-          </button>
         </div>
       </header>
 
@@ -69,7 +59,7 @@ export function HistoryView({ vm }: CareChatViewProps) {
               tabIndex={0}
             >
               <div className="checkbox" />
-              <img src={item.avatar} className="avatar" alt={`Call with ${item.name}`} onError={handleImageError} />
+              <img src={item.avatar || undefined} className="avatar" alt={`Call with ${item.name}`} onError={handleImageError} />
               <div className="history-info">
                 <h3 className={item.type === "missed" ? "text-red" : ""}>{item.name}</h3>
                 <div className="history-meta">

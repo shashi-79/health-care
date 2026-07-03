@@ -32,9 +32,12 @@ export async function POST(request: NextRequest) {
   const callAgentModel = process.env.CALL_AGENT_MODEL ?? process.env.BG_MODEL ?? DEFAULT_CALL_AGENT_MODEL;
   assertCallModel(callModel);
 
-  const memory = getSessionMemory(sessionId);
+  const [memory, uiMessages] = await Promise.all([
+    getSessionMemory(sessionId),
+    listUiMessages(sessionId, 12)
+  ]);
   const memoryContext = buildMemoryContext(memory, 1_200);
-  const recentTranscript = listUiMessages(sessionId, 12)
+  const recentTranscript = uiMessages
     .map((message) => `[${message.role}] ${message.content}`)
     .join("\n")
     .slice(-1_500);

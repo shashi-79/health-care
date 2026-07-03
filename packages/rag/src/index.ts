@@ -1,6 +1,5 @@
 import type { SessionMemory, SessionMemoryPatch } from "@rhc/types";
-
-const sessionMemoryStore = new Map<string, SessionMemory>();
+import { dbGetSessionMemory, dbSaveSessionMemory, dbListSessionMemories, dbResetSessionMemoryStore } from "@rhc/db";
 
 function nowIso() {
 	return new Date().toISOString();
@@ -22,45 +21,12 @@ function normalizeStringList(input: string[] | undefined, maxItems: number) {
 	return [...new Set(normalized)];
 }
 
-function cloneMemory(memory: SessionMemory): SessionMemory {
-	return {
-		...memory,
-		rootDetails: memory.rootDetails ? { ...memory.rootDetails } : undefined,
-		pastIllnesses: [...memory.pastIllnesses],
-		riskFlags: [...memory.riskFlags]
-	};
+export async function getSessionMemory(sessionId: string): Promise<SessionMemory> {
+	return dbGetSessionMemory(sessionId);
 }
 
-function buildDefaultMemory(sessionId: string): SessionMemory {
-	return {
-		sessionId,
-		pastIllnesses: [],
-		riskFlags: [],
-		updatedAt: nowIso()
-	};
-}
-
-export function getSessionMemory(sessionId: string): SessionMemory {
-	const key = normalizeSessionId(sessionId);
-	const existing = sessionMemoryStore.get(key);
-
-	if (existing) {
-		return cloneMemory(existing);
-	}
-
-	const created = buildDefaultMemory(key);
-	sessionMemoryStore.set(key, created);
-
-	if (sessionMemoryStore.size > 500) {
-		const oldestKey = sessionMemoryStore.keys().next().value;
-		if (oldestKey) sessionMemoryStore.delete(oldestKey);
-	}
-
-	return cloneMemory(created);
-}
-
-export function patchSessionMemory(sessionId: string, patch: SessionMemoryPatch): SessionMemory {
-	const current = getSessionMemory(sessionId);
+export async function patchSessionMemory(sessionId: string, patch: SessionMemoryPatch): Promise<SessionMemory> {
+	const current = await dbGetSessionMemory(sessionId);
 
 	const next: SessionMemory = {
 		...current,
@@ -73,12 +39,12 @@ export function patchSessionMemory(sessionId: string, patch: SessionMemoryPatch)
 		updatedAt: nowIso()
 	};
 
-	sessionMemoryStore.set(next.sessionId, cloneMemory(next));
-	return cloneMemory(next);
+	await dbSaveSessionMemory(next);
+	return next;
 }
 
-export function listSessionMemories(): SessionMemory[] {
-	return [...sessionMemoryStore.values()].map((memory) => cloneMemory(memory));
+export async function listSessionMemories(): Promise<SessionMemory[]> {
+	return dbListSessionMemories();
 }
 
 export function buildMemoryContext(memory: SessionMemory, maxChars = 2_000): string {
@@ -100,6 +66,6 @@ export function buildMemoryContext(memory: SessionMemory, maxChars = 2_000): str
 	return `[trimmed ${raw.length - clipped.length} chars]\n${clipped}`;
 }
 
-export function resetRagForTests() {
-	sessionMemoryStore.clear();
+export async function resetRagForTests(): Promise<void> {
+	dbResetSessionMemoryStore();
 }

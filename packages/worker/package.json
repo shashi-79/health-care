@@ -14,7 +14,7 @@
     "@rhc/db": "*",
     "@rhc/obs": "*",
     "@rhc/rag": "*",
-    "bullmq": "^5.7.8"
+    "@rhc/safety": "*"
   },
   "devDependencies": {
     "tsup": "^8.0.2",
