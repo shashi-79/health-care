@@ -1,6 +1,6 @@
-import { dbGetCallState, dbSaveCallState, CareCallState, CallStatus, CallDirection } from "@rhc/db";
+import { dbGetCallState, dbSaveCallState, CareCallState } from "@rhc/db";
 
-export type { CareCallState, CallStatus, CallDirection };
+export type { CareCallState };
 
 export function normalizeSessionId(value: unknown) {
   if (typeof value !== "string") return "default";

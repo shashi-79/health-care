@@ -13,7 +13,7 @@ import {
   Trash2
 } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
-import { handleActionKeyDown, handleImageError } from "./viewTypes";
+import { handleActionKeyDown, handleImageError, LetterAvatar } from "./viewTypes";
 
 export function HistoryView({ vm }: CareChatViewProps) {
   return (
@@ -59,7 +59,7 @@ export function HistoryView({ vm }: CareChatViewProps) {
               tabIndex={0}
             >
               <div className="checkbox" />
-              <img src={item.avatar || undefined} className="avatar" alt={`Call with ${item.name}`} onError={handleImageError} />
+              <LetterAvatar name={item.name} size={45} style={{ marginRight: "15px" }} />
               <div className="history-info">
                 <h3 className={item.type === "missed" ? "text-red" : ""}>{item.name}</h3>
                 <div className="history-meta">

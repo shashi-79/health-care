@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { ArrowLeft, CalendarDays, Check, ChevronRight, Edit, HeartPulse, Ruler, UserRound, X } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
-import { handleImageError } from "./viewTypes";
+import { handleImageError, LetterAvatar } from "./viewTypes";
 
 export function ProfileView({ vm }: CareChatViewProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -77,10 +77,9 @@ export function ProfileView({ vm }: CareChatViewProps) {
 
       <div className="profile-hero">
         <div className="profile-hero-avatar">
-          <img src={vm.contactProfile.avatarUrl || undefined} alt={`${vm.contactProfile.name} profile avatar`} onError={handleImageError} />
+          <LetterAvatar name={vm.contactProfile.name} size={150} style={{ marginBottom: "15px" }} />
         </div>
         <h2>{vm.contactProfile.name || "Patient Profile"}</h2>
-        <span>{vm.contactProfile.phone || "No phone added"}</span>
       </div>
 
       <section className="profile-card">

@@ -3,31 +3,11 @@ import type { BgPromptMessage, ContextBudget } from "@rhc/types";
 const DEFAULT_CONTEXT_WINDOW_TOKENS = 64_000;
 const AVG_CHARS_PER_TOKEN = 4;
 
-const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
-	"anthropic/claude-haiku-4.5": 200_000,
-	"anthropic/claude-haiku-3.5": 200_000,
-	"anthropic/claude-sonnet-4": 200_000,
-	"openai/gpt-4o": 128_000,
-	"openai/gpt-4o-mini": 128_000
-};
-
-function normalizeModel(model: string) {
-	return model.trim().toLowerCase();
-}
-
 function clamp(value: number, min: number, max: number) {
 	return Math.max(min, Math.min(max, value));
 }
 
-export function getModelContextWindow(model: string): number {
-	const normalized = normalizeModel(model);
-
-	for (const [key, value] of Object.entries(MODEL_CONTEXT_WINDOWS)) {
-		if (normalized === key || normalized.startsWith(`${key}:`)) {
-			return value;
-		}
-	}
-
+function getModelContextWindow(model: string): number {
 	return DEFAULT_CONTEXT_WINDOW_TOKENS;
 }
 
@@ -85,38 +65,3 @@ export function fitMessagesToBudget(messages: BgPromptMessage[], budget: Context
 	return selected;
 }
 
-export function coerceStringArray(input: unknown): string[] {
-	if (Array.isArray(input)) {
-		return input
-			.filter((value): value is string => typeof value === "string")
-			.map((value) => value.trim())
-			.filter((value) => value.length > 0);
-	}
-
-	if (typeof input === "string") {
-		const value = input.trim();
-		return value.length > 0 ? [value] : [];
-	}
-
-	return [];
-}
-
-export function parseMarkdownToText(markdown: string): string {
-	if (typeof markdown !== "string") {
-		return "";
-	}
-
-	return markdown
-		.replace(/^#+\s+/gm, "")
-		.replace(/(\*\*|__)(.*?)\1/g, "$2")
-		.replace(/(\*|_)(.*?)\1/g, "$2")
-		.replace(/```[\s\S]*?```/g, "")
-		.replace(/`([^`]+)`/g, "$1")
-		.replace(/!?\[([^\]]*)\]\([^)]+\)/g, "$1")
-		.replace(/^\s*>\s+/gm, "")
-		.replace(/<[^>]*>/g, "")
-		.replace(/^\s*[-*+]\s+/gm, "")
-		.replace(/^\s*\d+\.\s+/gm, "")
-		.replace(/\n{3,}/g, "\n\n")
-		.trim();
-}

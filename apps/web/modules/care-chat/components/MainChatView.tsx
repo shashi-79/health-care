@@ -14,7 +14,7 @@ import {
   X
 } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
-import { handleActionKeyDown, handleImageError } from "./viewTypes";
+import { handleActionKeyDown, handleImageError, LetterAvatar } from "./viewTypes";
 import { ImagePreviewOverlay } from "./ImagePreviewOverlay";
 function renderFormattedText(text: string) {
   if (!text) return null;
@@ -78,7 +78,7 @@ export function MainChatView({ vm }: CareChatViewProps) {
             <ArrowLeft />
           </button>
           <div className="profile-pic">
-            <img src={vm.contactProfile.avatarUrl || undefined} alt={`${vm.contactProfile.name} profile`} onError={handleImageError} />
+            <LetterAvatar name={vm.contactProfile.name} size={40} />
           </div>
           <div className="contact-info">
             <h2>{vm.contactProfile.name}</h2>
@@ -88,9 +88,6 @@ export function MainChatView({ vm }: CareChatViewProps) {
         <div className="header-actions">
           <button className="icon-btn" onClick={vm.startCall} type="button" aria-label="Call">
             <Phone />
-          </button>
-          <button className="icon-btn" onClick={() => vm.setShowSearch(true)} type="button" aria-label="Search">
-            <Search />
           </button>
           <div>
             <button

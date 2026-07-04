@@ -1,6 +1,6 @@
 export type ActiveView = "chat" | "calling" | "history" | "profile";
 
-export type HistoryType = "in" | "out" | "missed";
+type HistoryType = "in" | "out" | "missed";
 
 export type HistoryItem = {
   id: number;

@@ -4,7 +4,7 @@
 
 import { Mic, MicOff, Pause, PhoneCall, PhoneIncoming, PhoneOff, PhoneOutgoing, Volume2, VolumeX } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
-import { handleImageError } from "./viewTypes";
+import { handleImageError, LetterAvatar } from "./viewTypes";
 
 export function CallView({ vm }: CareChatViewProps) {
   const isIncomingCall = vm.callDirection === "incoming";
@@ -27,7 +27,7 @@ export function CallView({ vm }: CareChatViewProps) {
       </div>
       <div className="call-center">
         <div className={`avatar-ring ${vm.isRinging ? "is-ringing" : ""}`}>
-          <img src={vm.contactProfile.avatarUrl || undefined} alt={`${vm.contactProfile.name} call avatar`} onError={handleImageError} />
+          <LetterAvatar name={vm.contactProfile.name} size="100%" />
         </div>
       </div>
       {isIncomingRinging ? (
