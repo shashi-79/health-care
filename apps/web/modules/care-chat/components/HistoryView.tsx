@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
-
 import {
   ArrowLeft,
   Link2,
@@ -13,7 +11,7 @@ import {
   Trash2
 } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
-import { handleActionKeyDown, handleImageError, LetterAvatar } from "./viewTypes";
+import { handleActionKeyDown, LetterAvatar } from "./viewTypes";
 
 export function HistoryView({ vm }: CareChatViewProps) {
   return (

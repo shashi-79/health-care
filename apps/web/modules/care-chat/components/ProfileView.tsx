@@ -1,11 +1,9 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
-
 import { useState } from "react";
-import { ArrowLeft, CalendarDays, Check, ChevronRight, Edit, HeartPulse, Ruler, UserRound, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, Edit, HeartPulse, Ruler, UserRound, X } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
-import { handleImageError, LetterAvatar } from "./viewTypes";
+import { LetterAvatar } from "./viewTypes";
 
 export function ProfileView({ vm }: CareChatViewProps) {
   const [isEditing, setIsEditing] = useState(false);

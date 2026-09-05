@@ -28,7 +28,7 @@ const DOSAGE_PATTERNS = [
 ];
 
 const DIAGNOSIS_CERTAINTY_PATTERNS = [
-  /\b(?:this is|it is|you are)\s+(?:definitely|certainly|clearly|undoubtedly)\b/i,
+  /\b(?:this is|it is|you are|you)\s+(?:definitely|certainly|clearly|undoubtedly)\b/i,
   /\bconfirmed diagnosis\b/i,
   /\bno doubt\b/i,
   /\byou have\s+(?:a\s+)?(?:confirmed\s+)?(?:infection|pneumonia|stroke|heart attack|diabetes|cancer|asthma|covid)\b/i,

@@ -8,7 +8,6 @@ import {
   History,
   MoreVertical,
   Phone,
-  Search,
   SendHorizontal,
   Trash2,
   X

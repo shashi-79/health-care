@@ -43,11 +43,11 @@ export async function transcribeAudio(base64Audio: string, format: "wav" | "mp3"
       DEFAULT_AUDIO_TRANSCRIBE_TIMEOUT_MS,
       `Audio transcription timed out after ${DEFAULT_AUDIO_TRANSCRIBE_TIMEOUT_MS}ms`
     );
-    return response.text ?? "";
+    return (response as any)?.text ?? "";
   }
 
   const openrouter = getOpenRouterClient();
-  const completion = await withTimeout(
+  const completion: any = await withTimeout(
     openrouter.chat.completions.create({
       model: modelName,
       messages: [
@@ -64,7 +64,7 @@ export async function transcribeAudio(base64Audio: string, format: "wav" | "mp3"
     `Audio transcription timed out after ${DEFAULT_AUDIO_TRANSCRIBE_TIMEOUT_MS}ms`
   );
 
-  const raw: any = completion.choices?.[0]?.message?.content;
+  const raw: any = completion?.choices?.[0]?.message?.content;
   if (typeof raw === "string") return raw;
   if (Array.isArray(raw)) {
     return raw

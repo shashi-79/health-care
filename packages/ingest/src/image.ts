@@ -44,11 +44,11 @@ export async function describeImage(base64Image: string, mimeType: string, custo
       DEFAULT_IMAGE_ANALYZE_TIMEOUT_MS,
       `Image analysis timed out after ${DEFAULT_IMAGE_ANALYZE_TIMEOUT_MS}ms`
     );
-    return response.text?.trim() ?? "";
+    return (response as any)?.text?.trim() ?? "";
   }
 
   const openrouter = getOpenRouterClient();
-  const completion = await withTimeout(
+  const completion: any = await withTimeout(
     openrouter.chat.completions.create({
       model: modelName,
       messages: [
@@ -72,7 +72,7 @@ export async function describeImage(base64Image: string, mimeType: string, custo
     `Image analysis timed out after ${DEFAULT_IMAGE_ANALYZE_TIMEOUT_MS}ms`
   );
 
-  const raw: any = completion.choices?.[0]?.message?.content;
+  const raw: any = completion?.choices?.[0]?.message?.content;
   if (typeof raw === "string") return raw.trim();
   if (Array.isArray(raw)) {
     return raw

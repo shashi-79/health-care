@@ -1,4 +1,4 @@
-import { ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CAPTURE_PREVIEW_URL, formatCallDuration } from "./constants";
 import { buildSeededBrowserState } from "./data/seedData";
 import { loadCareChatBrowserState, saveCareChatBrowserState } from "./localBrowserStore";
@@ -990,23 +990,6 @@ export function useCareChatController() {
 
 
 
-  async function urlToBase64(url: string): Promise<string> {
-    if (url.startsWith("data:")) {
-      return url.split(",")[1];
-    }
-    const response = await fetch(url);
-    const blob = await response.blob();
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64 = reader.result as string;
-        resolve(base64.split(",")[1]);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(blob);
-    });
-  }
-
   function openImage(url: string) {
     setPreviewImageUrl(url);
   }
@@ -1224,7 +1207,7 @@ export function useCareChatController() {
     void syncCareDataFromServer(sessionId);
 
     let isMounted = true;
-    let abortController = new AbortController();
+    const abortController = new AbortController();
 
     async function poll() {
       while (isMounted) {
@@ -1262,7 +1245,7 @@ export function useCareChatController() {
 
           // Sleep very briefly before the next poll to prevent tight loops
           await new Promise(r => setTimeout(r, 1000));
-        } catch (err) {
+        } catch {
           if (!isMounted) break;
           // In case of network errors or aborts, wait a bit before retrying
           await new Promise(r => setTimeout(r, 4000));

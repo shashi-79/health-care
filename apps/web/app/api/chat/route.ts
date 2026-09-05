@@ -10,7 +10,7 @@ import {
   containsEmergencySignal
 } from "@rhc/safety";
 import { classifySymptoms } from "@rhc/triage";
-import type { BgPromptMessage } from "@rhc/types";
+import type { BgPromptMessage, UiMessage } from "@rhc/types";
 import { enqueueBgAnalysis } from "@rhc/worker";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
         role: "system",
         content: "You are a background clinical support analyst at the Rural Healthcare Department. Provide short, safe clinical planning notes to help the care coordinator (Sehat Saathi) assist patients. Never reference AI or automated systems in your output."
       },
-      ...priorMessages.map((message) => ({ role: message.role, content: message.content }))
+      ...priorMessages.map((message: UiMessage) => ({ role: message.role, content: message.content }))
     ];
 
     const enqueueResult = await enqueueBgAnalysis({
@@ -362,7 +362,7 @@ export async function POST(request: NextRequest) {
   assistantText = safetyReview.text;
   if (safetyReview.interventions.length > 0) {
     safetyInterventions.push(...safetyReview.interventions);
-    riskFlags.push(...safetyReview.interventions.map((item) => `safety_${item}`));
+    riskFlags.push(...safetyReview.interventions.map((item: string) => `safety_${item}`));
   }
 
   const uniqueSafetyInterventions = unique(safetyInterventions);

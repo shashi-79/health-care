@@ -1,10 +1,8 @@
 "use client";
 
-/* eslint-disable @next/next/no-img-element */
-
 import { Mic, MicOff, Pause, PhoneCall, PhoneIncoming, PhoneOff, PhoneOutgoing, Volume2, VolumeX } from "lucide-react";
 import type { CareChatViewProps } from "./viewTypes";
-import { handleImageError, LetterAvatar } from "./viewTypes";
+import { LetterAvatar } from "./viewTypes";
 
 export function CallView({ vm }: CareChatViewProps) {
   const isIncomingCall = vm.callDirection === "incoming";

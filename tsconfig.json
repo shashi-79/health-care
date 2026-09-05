@@ -41,6 +41,9 @@
       "path": "packages/obs/tsconfig.json"
     },
     {
+      "path": "packages/worker/tsconfig.json"
+    },
+    {
       "path": "apps/web/tsconfig.json"
     }
   ]

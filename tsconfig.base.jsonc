@@ -18,45 +18,88 @@
     "types": [
       "node"
     ],
+    "baseUrl": ".",
     "paths": {
+      "@rhc/types": [
+        "./packages/types/src/index.ts"
+      ],
       "@rhc/types/*": [
         "./packages/types/src/*"
+      ],
+      "@rhc/ai": [
+        "./packages/ai/src/index.ts"
       ],
       "@rhc/ai/*": [
         "./packages/ai/src/*"
       ],
+      "@rhc/policy": [
+        "./packages/policy/src/index.ts"
+      ],
       "@rhc/policy/*": [
         "./packages/policy/src/*"
+      ],
+      "@rhc/triage": [
+        "./packages/triage/src/index.ts"
       ],
       "@rhc/triage/*": [
         "./packages/triage/src/*"
       ],
+      "@rhc/ingest": [
+        "./packages/ingest/src/index.ts"
+      ],
       "@rhc/ingest/*": [
         "./packages/ingest/src/*"
+      ],
+      "@rhc/agents": [
+        "./packages/agents/src/index.ts"
       ],
       "@rhc/agents/*": [
         "./packages/agents/src/*"
       ],
+      "@rhc/tools": [
+        "./packages/tools/src/index.ts"
+      ],
       "@rhc/tools/*": [
         "./packages/tools/src/*"
+      ],
+      "@rhc/rag": [
+        "./packages/rag/src/index.ts"
       ],
       "@rhc/rag/*": [
         "./packages/rag/src/*"
       ],
+      "@rhc/medical": [
+        "./packages/medical/src/index.ts"
+      ],
       "@rhc/medical/*": [
         "./packages/medical/src/*"
+      ],
+      "@rhc/safety": [
+        "./packages/safety/src/index.ts"
       ],
       "@rhc/safety/*": [
         "./packages/safety/src/*"
       ],
+      "@rhc/db": [
+        "./packages/db/src/index.ts"
+      ],
       "@rhc/db/*": [
         "./packages/db/src/*"
+      ],
+      "@rhc/scheduler": [
+        "./packages/scheduler/src/index.ts"
       ],
       "@rhc/scheduler/*": [
         "./packages/scheduler/src/*"
       ],
+      "@rhc/obs": [
+        "./packages/obs/src/index.ts"
+      ],
       "@rhc/obs/*": [
         "./packages/obs/src/*"
+      ],
+      "@rhc/worker": [
+        "./packages/worker/src/index.ts"
       ],
       "@rhc/worker/*": [
         "./packages/worker/src/*"

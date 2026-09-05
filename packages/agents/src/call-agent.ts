@@ -178,7 +178,7 @@ export async function runCallAgent(input: CallAgentInput): Promise<CallAgentResu
     `Call agent timed out after ${timeoutMs}ms`
   );
 
-  const raw = extractText(completion.choices?.[0]?.message?.content);
+  const raw = extractText((completion as any)?.choices?.[0]?.message?.content);
   const parsed = parseJsonResult(raw);
 
   if (!parsed) {

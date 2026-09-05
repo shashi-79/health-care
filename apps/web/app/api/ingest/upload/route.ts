@@ -11,6 +11,7 @@ type UploadBody = {
   base64Audio?: string;
   base64Image?: string;
   audioFormat?: "wav" | "mp3" | "ogg";
+  ocrOnly?: boolean;
 };
 
 function normalizeSessionId(value: unknown) {
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
   } else if (kind === "image" && typeof body.base64Image === "string" && body.base64Image.length > 0) {
     try {
-      if ((body as any).ocrOnly === true) {
+      if (body.ocrOnly === true) {
         const ocrText = await performOcr(body.base64Image, mimeType ?? "image/jpeg");
         transcript = `[Image Uploaded - Vision Context: ${ocrText}]`.trim();
       } else {
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
 
   const normalizedText = typeof body.text === "string" ? body.text.trim() : "";
   const capturedText = transcript || normalizedText;
-  const ocrOnly = (body as any).ocrOnly === true;
+  const ocrOnly = body.ocrOnly === true;
 
   if (capturedText.length > 0 && !ocrOnly) {
     addUiMessage({

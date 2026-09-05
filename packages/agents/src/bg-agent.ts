@@ -275,7 +275,7 @@ export async function runBgAgent(input: BgAgentInput): Promise<BgAgentResult> {
 
   const budget = buildContextBudget(input.model);
   const fittedMessages = fitMessagesToBudget(input.messages, budget);
-  const prompt = fittedMessages.map((message) => `[${message.role}] ${message.content}`).join("\n");
+  const prompt = fittedMessages.map((message: BgPromptMessage) => `[${message.role}] ${message.content}`).join("\n");
   const promptPreview = truncateTextToBudget(prompt, budget);
 
   const loopState = input.loopState ?? {

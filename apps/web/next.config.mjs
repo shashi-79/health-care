@@ -18,6 +18,22 @@ const nextConfig = {
     tsconfigPath: "./tsconfig.json"
   },
   serverExternalPackages: ["better-sqlite3", "tesseract.js"],
+  transpilePackages: [
+    "@rhc/agents",
+    "@rhc/ai",
+    "@rhc/db",
+    "@rhc/ingest",
+    "@rhc/medical",
+    "@rhc/obs",
+    "@rhc/policy",
+    "@rhc/rag",
+    "@rhc/safety",
+    "@rhc/scheduler",
+    "@rhc/tools",
+    "@rhc/triage",
+    "@rhc/types",
+    "@rhc/worker"
+  ],
   turbopack: {
     root: workspaceRoot
   },
