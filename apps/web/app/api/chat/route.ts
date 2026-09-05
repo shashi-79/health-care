@@ -2,7 +2,7 @@ import { runBgAgent } from "@rhc/agents";
 import { runChatAgent, runChatTransferAgent } from "@rhc/agents";
 import { addUiMessage, listUiMessages, clearUiMessages } from "@rhc/db";
 import { logEvent } from "@rhc/obs";
-import { assertChatModel } from "@rhc/policy";
+import { assertChatModel, assertBgModel } from "@rhc/policy";
 import { buildMemoryContext, getSessionMemory, patchSessionMemory } from "@rhc/rag";
 import {
   applyAssistantGuardrails,
@@ -57,34 +57,6 @@ function extractDrugQuery(text: string): string | undefined {
     return maybeDrug;
   }
   return undefined;
-}
-
-function buildFallbackAssistantText(input: {
-  emergencySignal: boolean;
-  medicalReference?: string;
-  userText: string;
-  symptoms: string[];
-  triageLevel: "mild" | "moderate" | "emergency";
-}) {
-  const lower = input.userText.toLowerCase().trim();
-  const isGreeting = /^(hi|hello|hey|good\s*morning|good\s*afternoon|good\s*evening|namaste)\b/i.test(lower);
-  const symptomText = input.symptoms.length > 0 ? ` Symptoms tracked: ${input.symptoms.join(", ")}.` : "";
-
-  if (input.emergencySignal) {
-    return `I'm very concerned about these symptoms. Please go to the nearest hospital or contact local emergency services right away. Your safety is our top priority.${symptomText}`;
-  }
-
-  if (isGreeting || (!input.userText && input.symptoms.length === 0)) {
-    return `Hello! I'm your care coordinator from the healthcare department. How are you feeling today? Please let me know how I can help you.`;
-  }
-
-  const referenceText = input.medicalReference ? ` Let me check this: ${input.medicalReference}` : "";
-
-  if (input.triageLevel === "moderate") {
-    return `I understand you're not feeling well. Please make sure to rest and stay well hydrated today. Keep a close eye on how you feel. If you start having any breathing trouble, chest pain, or if your fever gets worse, please let us know or see a doctor in person right away.${symptomText}${referenceText}`;
-  }
-
-  return `Thank you for sharing that with me. I've noted down your details. Please rest, drink plenty of fluids, and let me know if anything changes or if you feel worse. We are here to help you.${symptomText}${referenceText}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -201,6 +173,7 @@ export async function POST(request: NextRequest) {
     if (!bgModel) {
       throw new Error("BG_MODEL is not defined in the environment.");
     }
+    assertBgModel(bgModel);
 
     const bgMessages: BgPromptMessage[] = [
       {
@@ -239,7 +212,7 @@ export async function POST(request: NextRequest) {
             enableTools: Boolean(drugQuery) || isOcrMessage
           }),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error("inline_bg_timeout")), 8_000)
+            setTimeout(() => reject(new Error("inline_bg_timeout")), 25_000)
           )
         ])) as Awaited<ReturnType<typeof runBgAgent>>;
 
@@ -290,9 +263,6 @@ export async function POST(request: NextRequest) {
       bgEscalationTemplate ?? buildEmergencyEscalationTemplate(symptoms.length > 0 ? symptoms : triageInput);
     safetyInterventions.push("emergency_escalation_template");
     riskFlags.push("emergency_escalation_template");
-  } else if (shouldRunBgAnalysis) {
-    assistantText = medicalReference || "I'm looking into your medical details and checking our records. Give me just a moment...";
-    usedChatAgent = false;
   } else {
     try {
       const chatResult = await runChatAgent({
@@ -347,14 +317,28 @@ export async function POST(request: NextRequest) {
         assistantText = secondChatResult.responseText;
         bgAnalysis.actions.push("ocr_tool_executed");
       }
-    } catch {
-      assistantText = buildFallbackAssistantText({
-        emergencySignal,
-        medicalReference,
-        userText,
-        symptoms,
-        triageLevel: triage.level
-      });
+    } catch (chatError) {
+      console.error("[Chat Agent Error]:", chatError);
+      try {
+        const retryResult = await runChatAgent({
+          sessionId,
+          model,
+          memoryContext,
+          triageLevel: triage.level,
+          emergencySignal,
+          messages: chatMessages,
+          transferDecision: transferDecision.decision,
+          transferReason: transferDecision.reason,
+          medicalReference,
+          enableTools: false,
+          timeoutMs: 45000
+        });
+        assistantText = retryResult.responseText;
+        usedChatAgent = true;
+      } catch (retryError) {
+        console.error("[Chat Agent Retry Failed]:", retryError);
+        assistantText = `I apologize, but I am currently having difficulty communicating with the service. Please try again. (${(retryError as Error)?.message ?? "Service unavailable"})`;
+      }
     }
   }
 

@@ -1,7 +1,7 @@
 import { getOpenRouterClient } from "@rhc/ai";
 import { assertBgModel } from "@rhc/policy";
 
-const DEFAULT_CALL_AGENT_TIMEOUT_MS = Number(process.env.CALL_AGENT_TIMEOUT_MS ?? 5000);
+const DEFAULT_CALL_AGENT_TIMEOUT_MS = Number(process.env.CALL_AGENT_TIMEOUT_MS ?? 25000);
 
 export type CallAgentInput = {
   sessionId: string;

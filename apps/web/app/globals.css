@@ -273,6 +273,11 @@ body {
   text-align: left;
 }
 
+.message:has(.table-wrap),
+.message:has(table) {
+  max-width: min(94%, 720px);
+}
+
 .bot-msg {
   align-self: flex-start;
   background: var(--bot-msg-bg);
@@ -299,6 +304,319 @@ body {
   color: rgba(0, 0, 0, 0.4);
   text-align: right;
   margin-top: 4px;
+}
+
+/* Markdown Content Styling */
+.markdown-content {
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.markdown-content > :first-child {
+  margin-top: 0 !important;
+}
+
+.markdown-content p {
+  margin-bottom: 6px;
+}
+
+.markdown-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* Headings Typography */
+.markdown-content h1,
+.markdown-content h2,
+.markdown-content h3,
+.markdown-content h4,
+.markdown-content h5,
+.markdown-content h6,
+.markdown-content .md-heading {
+  font-weight: 700;
+  color: inherit;
+  line-height: 1.35;
+  text-wrap: balance;
+}
+
+.markdown-content h1,
+.markdown-content .md-h1 {
+  font-size: 1.25rem;
+  margin-top: 14px;
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.markdown-content h2,
+.markdown-content .md-h2 {
+  font-size: 1.15rem;
+  margin-top: 12px;
+  margin-bottom: 6px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.markdown-content h3,
+.markdown-content .md-h3 {
+  font-size: 1.08rem;
+  font-weight: 600;
+  margin-top: 10px;
+  margin-bottom: 4px;
+}
+
+.markdown-content h4,
+.markdown-content .md-h4 {
+  font-size: 1.02rem;
+  font-weight: 600;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.markdown-content h5,
+.markdown-content .md-h5 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-top: 8px;
+  margin-bottom: 3px;
+}
+
+.markdown-content h6,
+.markdown-content .md-h6 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+  margin-top: 6px;
+  margin-bottom: 2px;
+}
+
+.patient-msg .markdown-content h1,
+.patient-msg .markdown-content .md-h1 {
+  border-bottom-color: rgba(0, 0, 0, 0.14);
+}
+
+.patient-msg .markdown-content h2,
+.patient-msg .markdown-content .md-h2 {
+  border-bottom-color: rgba(0, 0, 0, 0.1);
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 8px 0 10px 22px;
+  padding-left: 2px;
+}
+
+.markdown-content ol {
+  list-style-type: decimal;
+}
+
+.markdown-content ul {
+  list-style-type: disc;
+}
+
+.markdown-content li {
+  margin-bottom: 5px;
+  line-height: 1.45;
+  padding-left: 2px;
+}
+
+.markdown-content li:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content li::marker {
+  font-weight: 600;
+  color: var(--primary, #008069);
+}
+
+.patient-msg .markdown-content li::marker {
+  color: inherit;
+  opacity: 0.85;
+}
+
+.markdown-content li > ul,
+.markdown-content li > ol {
+  margin: 4px 0 4px 18px;
+}
+
+.markdown-content strong {
+  font-weight: 600;
+}
+
+.markdown-content em {
+  font-style: italic;
+}
+
+/* Markdown Tables & Table Headers */
+.markdown-content .table-wrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  margin: 10px 0;
+  border-radius: 8px;
+  border: 1px solid #cbd5e1;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  -webkit-overflow-scrolling: touch;
+}
+
+.markdown-content table {
+  width: 100%;
+  min-width: 100%;
+  display: table;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.markdown-content thead {
+  background: #f1f5f9;
+  border-bottom: 2px solid #cbd5e1;
+}
+
+.markdown-content th {
+  background: #f1f5f9;
+  color: #1e293b;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.02em;
+  padding: 8px 12px;
+  border-right: 1px solid #e2e8f0;
+  vertical-align: middle;
+  white-space: nowrap;
+  word-break: normal;
+}
+
+.markdown-content th:last-child {
+  border-right: none;
+}
+
+.markdown-content td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  border-right: 1px solid #f8fafc;
+  vertical-align: top;
+  color: #334155;
+  word-break: normal;
+}
+
+.markdown-content th[align="center"],
+.markdown-content td[align="center"] {
+  text-align: center;
+}
+
+.markdown-content th[align="right"],
+.markdown-content td[align="right"] {
+  text-align: right;
+}
+
+.markdown-content th[align="left"],
+.markdown-content td[align="left"] {
+  text-align: left;
+}
+
+.markdown-content td:last-child {
+  border-right: none;
+}
+
+.markdown-content tr:last-child td {
+  border-bottom: none;
+}
+
+.markdown-content tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.markdown-content tbody tr:hover {
+  background: #f1f5f9;
+}
+
+/* Patient message bubble table overrides */
+.patient-msg .markdown-content .table-wrap {
+  border-color: rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.patient-msg .markdown-content thead {
+  background: rgba(0, 0, 0, 0.08);
+  border-bottom-color: rgba(0, 0, 0, 0.18);
+}
+
+.patient-msg .markdown-content th {
+  background: rgba(0, 0, 0, 0.08);
+  color: inherit;
+  border-right-color: rgba(0, 0, 0, 0.1);
+}
+
+.patient-msg .markdown-content td {
+  border-bottom-color: rgba(0, 0, 0, 0.08);
+  border-right-color: rgba(0, 0, 0, 0.06);
+  color: inherit;
+}
+
+.patient-msg .markdown-content tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.03);
+}
+
+.patient-msg .markdown-content tbody tr:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid #3b82f6;
+  padding: 4px 10px;
+  margin: 8px 0;
+  background: rgba(59, 130, 246, 0.06);
+  border-radius: 0 6px 6px 0;
+  font-style: italic;
+}
+
+.markdown-content code {
+  background: rgba(0, 0, 0, 0.06);
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88em;
+}
+
+.markdown-content pre {
+  background: #1e293b;
+  color: #f8fafc;
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 12px;
+}
+
+.markdown-content pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.markdown-content a.markdown-link {
+  color: #1a73e8;
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.markdown-content a.markdown-pdf-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #1a73e8;
+  text-decoration: underline;
+  margin-top: 6px;
+  margin-bottom: 4px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background-color: rgba(26, 115, 232, 0.1);
 }
 
 .image-message {

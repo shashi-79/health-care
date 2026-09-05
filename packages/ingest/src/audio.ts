@@ -23,7 +23,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
 }
 
 export async function transcribeAudio(base64Audio: string, format: "wav" | "mp3" | "ogg" = "wav") {
-  const modelName = process.env.AUDIO_TRANSCRIBE_MODEL || "openai/gpt-4o-audio-preview";
+  const modelName = process.env.AUDIO_TRANSCRIBE_MODEL;
+  if (!modelName) {
+    throw new Error("AUDIO_TRANSCRIBE_MODEL is not defined in the environment.");
+  }
 
   if (modelName.toLowerCase().includes("gemini")) {
     const ai = getGeminiClient();

@@ -2,8 +2,8 @@ import { getOpenRouterClient } from "@rhc/ai";
 import { assertChatModel } from "@rhc/policy";
 import type { BgPromptMessage } from "@rhc/types";
 
-const DEFAULT_CHAT_AGENT_TIMEOUT_MS = Number(process.env.CHAT_AGENT_TIMEOUT_MS ?? 5500);
-const DEFAULT_CHAT_TRANSFER_TIMEOUT_MS = Number(process.env.CHAT_TRANSFER_TIMEOUT_MS ?? 3200);
+const DEFAULT_CHAT_AGENT_TIMEOUT_MS = Number(process.env.CHAT_AGENT_TIMEOUT_MS ?? 45000);
+const DEFAULT_CHAT_TRANSFER_TIMEOUT_MS = Number(process.env.CHAT_TRANSFER_TIMEOUT_MS ?? 20000);
 
 export type ChatAgentInput = {
   sessionId: string;
@@ -71,29 +71,29 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
 }
 
 function extractResponseText(content: unknown): string {
+  let text = "";
   if (typeof content === "string") {
-    return content.trim();
+    text = content.trim();
+  } else if (Array.isArray(content)) {
+    text = content
+      .map((chunk) => {
+        if (!chunk || typeof chunk !== "object") {
+          return "";
+        }
+
+        const record = chunk as { type?: unknown; text?: unknown };
+        if (record.type !== "text") {
+          return "";
+        }
+
+        return typeof record.text === "string" ? record.text : "";
+      })
+      .join("\n")
+      .trim();
   }
 
-  if (!Array.isArray(content)) {
-    return "";
-  }
-
-  const text = content
-    .map((chunk) => {
-      if (!chunk || typeof chunk !== "object") {
-        return "";
-      }
-
-      const record = chunk as { type?: unknown; text?: unknown };
-      if (record.type !== "text") {
-        return "";
-      }
-
-      return typeof record.text === "string" ? record.text : "";
-    })
-    .join("\n")
-    .trim();
+  // Remove reasoning / thinking tags if emitted into content
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
 
   return text;
 }
@@ -231,7 +231,7 @@ export async function runChatAgent(input: ChatAgentInput): Promise<ChatAgentResu
     openrouter.chat.completions.create({
       model: input.model,
       temperature: 0.25,
-      max_tokens: 320,
+      max_tokens: 1000,
       messages,
       tools: input.enableTools === false ? undefined : [
         {

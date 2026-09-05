@@ -7,11 +7,12 @@ function resolveOpenRouterApiKey() {
 }
 
 function resolveOpenRouterBaseUrl() {
-  const url = process.env.OPENROUTER_BASE_URL ?? process.env.OPENROUTER_SITE_URL;
-  if (!url) {
-    throw new Error("Neither OPENROUTER_BASE_URL nor OPENROUTER_SITE_URL is defined in the environment.");
-  }
-  return url;
+  const raw =
+    process.env.OPENROUTER_BASE_URL ??
+    (process.env.OPENROUTER_SITE_URL?.includes("openrouter.ai")
+      ? process.env.OPENROUTER_SITE_URL
+      : "https://openrouter.ai/api/v1");
+  return raw.replace(/\/chat\/completions\/?$/, "").trim();
 }
 
 export function getOpenRouterClient() {

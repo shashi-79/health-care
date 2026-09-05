@@ -6,6 +6,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const workspaceRoot = path.resolve(__dirname, "../../");
 
+import nextEnv from "@next/env";
+nextEnv.loadEnvConfig(workspaceRoot);
+
 const localIPs = Object.values(os.networkInterfaces())
   .flat()
   .filter((details) => details && details.family === "IPv4" && !details.internal)

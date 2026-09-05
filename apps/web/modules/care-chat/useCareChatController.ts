@@ -34,6 +34,7 @@ type ApiChatResponse = {
     drugHints?: string[];
     shouldStop?: boolean;
   };
+  uiMessageCount?: number;
 };
 
 type ApiHistoryResponse = {
@@ -85,6 +86,20 @@ function buildClientSessionId() {
     return `care-${crypto.randomUUID()}`;
   }
   return `care-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function isSameMessage(a: ChatMessage, b: ChatMessage): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "system" && b.kind === "system") {
+    return a.text.trim() === b.text.trim();
+  }
+  if (a.kind === "text" && b.kind === "text") {
+    return a.role === b.role && a.text.trim() === b.text.trim();
+  }
+  if (a.kind === "image" && b.kind === "image") {
+    return a.role === b.role && a.imageUrl === b.imageUrl && (a.caption || "") === (b.caption || "");
+  }
+  return false;
 }
 
 function resolveInitialSessionId() {
@@ -216,10 +231,23 @@ export function useCareChatController() {
 
   function hydrateFromBrowserState(nextState: CareChatBrowserState) {
     setContactProfile({ ...nextState.profile });
-    setChatMessages(nextState.chatMessages.map((message) => ({ ...message })));
+
+    // Deduplicate any consecutive identical messages from stored state
+    const cleanMessages: ChatMessage[] = [];
+    for (const msg of nextState.chatMessages) {
+      if (cleanMessages.length > 0) {
+        const prev = cleanMessages[cleanMessages.length - 1];
+        if (isSameMessage(prev, msg)) {
+          continue;
+        }
+      }
+      cleanMessages.push({ ...msg });
+    }
+
+    setChatMessages(cleanMessages);
     setHistoryItems(nextState.historyItems.map((item) => ({ ...item })));
 
-    const nextMessageId = nextState.chatMessages.reduce((max, item) => Math.max(max, item.id), 0) + 1;
+    const nextMessageId = cleanMessages.reduce((max, item) => Math.max(max, item.id), 0) + 1;
     messageIdRef.current = Math.max(MESSAGE_ID_SEED, nextMessageId);
 
     const nextHistoryId = nextState.historyItems.reduce((max, item) => Math.max(max, item.id), 0) + 1;
@@ -261,7 +289,15 @@ export function useCareChatController() {
   }
 
   function appendMessage(message: ChatMessage) {
-    setChatMessages((prev) => [...prev, message]);
+    setChatMessages((prev) => {
+      if (prev.length > 0) {
+        const last = prev[prev.length - 1];
+        if (isSameMessage(last, message)) {
+          return prev;
+        }
+      }
+      return [...prev, message];
+    });
   }
 
   function notifyIncomingCall(contactName: string) {
@@ -449,7 +485,10 @@ export function useCareChatController() {
             geminiInitInFlightRef.current = true;
             try {
               const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-              const callModel = process.env.NEXT_PUBLIC_CALL_MODEL || "gemini-2.5-flash-native-audio-preview-12-2025";
+              const callModel = process.env.NEXT_PUBLIC_CALL_MODEL;
+              if (!callModel) {
+                throw new Error("NEXT_PUBLIC_CALL_MODEL is not configured in environment variables.");
+              }
               geminiAudioRef.current = new GeminiLiveAudio(apiKey, callModel);
               geminiAudioRef.current.setSpeakerMuted(!isSpeakerEnabled || isCallOnHold);
               void geminiAudioRef.current.startStream(
@@ -657,10 +696,11 @@ export function useCareChatController() {
         // If there's a corresponding server message, use the server message
         result.push(mapServerMessageToChat(messagesList[serverIdx], serverIdx));
         serverIdx++;
-      } else {
-        // In-flight local message not yet saved to server DB; keep it in UI
+      } else if (local.role === "patient") {
+        // Only keep an in-flight optimistic patient message if it's not yet on the server
         result.push(local);
       }
+      // Note: do not push local bot messages when serverIdx >= messagesList.length as bot messages are server-authoritative
     }
 
     // Append any remaining new server messages (e.g. new bot replies)
@@ -669,7 +709,19 @@ export function useCareChatController() {
       serverIdx++;
     }
 
-    const renumberedFinalMessages = result.map((m, idx) => ({
+    // Deduplicate any consecutive identical messages
+    const deduplicated: ChatMessage[] = [];
+    for (const msg of result) {
+      if (deduplicated.length > 0) {
+        const prev = deduplicated[deduplicated.length - 1];
+        if (isSameMessage(prev, msg)) {
+          continue;
+        }
+      }
+      deduplicated.push(msg);
+    }
+
+    const renumberedFinalMessages = deduplicated.map((m, idx) => ({
       ...m,
       id: idx
     }));
@@ -754,6 +806,10 @@ export function useCareChatController() {
       text: response.assistant.content,
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
     });
+
+    if (typeof response.uiMessageCount === "number") {
+      lastMsgCountRef.current = response.uiMessageCount;
+    }
 
     if (response.triage?.level === "emergency") {
       showToast("Emergency signal detected. Please seek urgent care.");

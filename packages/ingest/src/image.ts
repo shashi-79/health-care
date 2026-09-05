@@ -23,7 +23,10 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: 
 }
 
 export async function describeImage(base64Image: string, mimeType: string, customPrompt?: string) {
-  const modelName = process.env.VISION_MODEL || "openai/gpt-4o-mini";
+  const modelName = process.env.VISION_MODEL;
+  if (!modelName) {
+    throw new Error("VISION_MODEL is not defined in the environment.");
+  }
   const prompt = customPrompt || "Analyze this image from a rural healthcare patient. Describe any visible symptoms or context. If the image contains any visible text, hand-written notes, prescriptions, medical reports, or medication labels, transcribe all of the text verbatim (including medication names, dosages, symptoms, instructions, and test results) so that it can be processed by the text chatbot.";
 
   if (modelName.toLowerCase().includes("gemini")) {

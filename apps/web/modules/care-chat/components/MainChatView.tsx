@@ -15,52 +15,7 @@ import {
 import type { CareChatViewProps } from "./viewTypes";
 import { handleActionKeyDown, handleImageError, LetterAvatar } from "./viewTypes";
 import { ImagePreviewOverlay } from "./ImagePreviewOverlay";
-function renderFormattedText(text: string) {
-  if (!text) return null;
-
-  const parts = text.split(/(\[[^\]]+\]\([^)]+\)|\*\*[^*]+\*\*)/g);
-
-  return parts.map((part, index) => {
-    const linkMatch = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-    if (linkMatch) {
-      const label = linkMatch[1];
-      const url = linkMatch[2];
-      const isDataOrPdf = url.startsWith("data:") || url.includes(".pdf") || url.includes("/api/report/pdf");
-
-      return (
-        <a
-          key={index}
-          href={url}
-          download={isDataOrPdf ? "Medical_Report.pdf" : undefined}
-          target={url.startsWith("http") ? "_blank" : undefined}
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            fontWeight: 600,
-            color: "#1a73e8",
-            textDecoration: "underline",
-            marginTop: "6px",
-            marginBottom: "4px",
-            padding: "6px 12px",
-            borderRadius: "8px",
-            backgroundColor: "rgba(26, 115, 232, 0.1)"
-          }}
-        >
-          {label}
-        </a>
-      );
-    }
-
-    const boldMatch = part.match(/^\*\*([^*]+)\*\*$/);
-    if (boldMatch) {
-      return <strong key={index}>{boldMatch[1]}</strong>;
-    }
-
-    return part;
-  });
-}
+import { MarkdownViewer } from "./MarkdownViewer";
 
 export function MainChatView({ vm }: CareChatViewProps) {
   return (
@@ -187,7 +142,7 @@ export function MainChatView({ vm }: CareChatViewProps) {
 
           return (
             <div key={message.id} className={`message ${message.role === "bot" ? "bot-msg" : "patient-msg"}`}>
-              {renderFormattedText(message.text)}
+              <MarkdownViewer content={message.text} />
               <span className="time">{message.time}</span>
             </div>
           );

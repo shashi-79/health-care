@@ -5,9 +5,6 @@ import { assertCallModel } from "@rhc/policy";
 import { buildMemoryContext, getSessionMemory } from "@rhc/rag";
 import { NextRequest, NextResponse } from "next/server";
 
-const DEFAULT_CALL_MODEL = "gemini-2.5-flash-native-audio-preview-12-2025";
-const DEFAULT_CALL_AGENT_MODEL = "anthropic/claude-haiku-4.5";
-
 type CallInitRequestBody = {
   sessionId?: string;
 };
@@ -28,8 +25,14 @@ export async function POST(request: NextRequest) {
   }
 
   const sessionId = normalizeSessionId(body.sessionId);
-  const callModel = process.env.NEXT_PUBLIC_CALL_MODEL ?? DEFAULT_CALL_MODEL;
-  const callAgentModel = process.env.CALL_AGENT_MODEL ?? process.env.BG_MODEL ?? DEFAULT_CALL_AGENT_MODEL;
+  const callModel = process.env.NEXT_PUBLIC_CALL_MODEL;
+  if (!callModel) {
+    throw new Error("NEXT_PUBLIC_CALL_MODEL is not defined in the environment.");
+  }
+  const callAgentModel = process.env.CALL_AGENT_MODEL ?? process.env.BG_MODEL;
+  if (!callAgentModel) {
+    throw new Error("BG_MODEL or CALL_AGENT_MODEL is not defined in the environment.");
+  }
   assertCallModel(callModel);
 
   const [memory, uiMessages] = await Promise.all([
