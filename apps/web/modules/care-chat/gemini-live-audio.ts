@@ -40,17 +40,38 @@ class GeminiAudioProcessor extends AudioWorkletProcessor {
     this.bufferPointer = 0;
     // Reusable Int16 conversion buffer
     this.pcm16 = new Int16Array(this.bufferSize);
+    this.sampleOffset = 0;
   }
   
   process(inputs, outputs, parameters) {
     const input = inputs[0];
     if (input && input.length > 0) {
       const channelData = input[0];
-      for (let i = 0; i < channelData.length; i++) {
-        this.activeBuffer[this.bufferPointer++] = channelData[i];
-        if (this.bufferPointer >= this.bufferSize) {
-          this._flush();
+      // Downsample from actual context sampleRate (e.g. 48000/44100) to 16000 Hz if needed
+      const ratio = sampleRate / 16000;
+
+      if (Math.abs(ratio - 1) < 0.05) {
+        for (let i = 0; i < channelData.length; i++) {
+          this.activeBuffer[this.bufferPointer++] = channelData[i];
+          if (this.bufferPointer >= this.bufferSize) {
+            this._flush();
+          }
         }
+      } else {
+        while (this.sampleOffset < channelData.length) {
+          const index = Math.floor(this.sampleOffset);
+          const frac = this.sampleOffset - index;
+          const s0 = channelData[index];
+          const s1 = index + 1 < channelData.length ? channelData[index + 1] : s0;
+          const sample = s0 + frac * (s1 - s0);
+
+          this.activeBuffer[this.bufferPointer++] = sample;
+          if (this.bufferPointer >= this.bufferSize) {
+            this._flush();
+          }
+          this.sampleOffset += ratio;
+        }
+        this.sampleOffset -= channelData.length;
       }
     }
     return true;
@@ -104,10 +125,15 @@ export class GeminiLiveAudio {
   private playbackTimerId: number | null = null;
   private gainNode: GainNode | null = null;
   private isSpeakerMuted: boolean = false;
+  private isMicMuted: boolean = false;
 
   constructor(apiKey: string, model?: string) {
     this.ai = new GoogleGenAI({ apiKey });
     this.model = model || "gemini-2.5-flash-native-audio-preview-12-2025";
+  }
+
+  setMicMuted(muted: boolean) {
+    this.isMicMuted = muted;
   }
 
   async startStream(
@@ -117,34 +143,51 @@ export class GeminiLiveAudio {
     openingScript?: string
   ) {
     this.isIntentionalDisconnect = false;
-    this.inAudioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
-      sampleRate: 16000,
-    });
-    this.outAudioContext = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)({
-      sampleRate: 24000,
-    });
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+
+    try {
+      this.inAudioContext = new AudioCtx({ sampleRate: 16000 });
+    } catch {
+      this.inAudioContext = new AudioCtx();
+    }
+
+    try {
+      this.outAudioContext = new AudioCtx({ sampleRate: 24000 });
+    } catch {
+      this.outAudioContext = new AudioCtx();
+    }
+
     this.gainNode = this.outAudioContext.createGain();
     this.gainNode.gain.setValueAtTime(this.isSpeakerMuted ? 0 : 1, this.outAudioContext.currentTime);
     this.gainNode.connect(this.outAudioContext.destination);
     this.nextPlayTime = 0;
     this.playbackQueue = [];
 
-    if (this.inAudioContext.state === 'suspended') {
+    if (this.inAudioContext.state === "suspended") {
       await this.inAudioContext.resume();
+    }
+    if (this.outAudioContext.state === "suspended") {
+      await this.outAudioContext.resume();
     }
 
     this.sourceNode = this.inAudioContext.createMediaStreamSource(stream);
     
     // Inject and instantiate the Web Audio Worklet
-    const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
+    const blob = new Blob([WORKLET_CODE], { type: "application/javascript" });
     const url = URL.createObjectURL(blob);
     await this.inAudioContext.audioWorklet.addModule(url);
     URL.revokeObjectURL(url);
     
-    this.workletNode = new AudioWorkletNode(this.inAudioContext, 'gemini-audio-processor');
+    this.workletNode = new AudioWorkletNode(this.inAudioContext, "gemini-audio-processor");
 
+    // Route mic worklet through a silent gain node to avoid acoustic feedback to speakers
+    const silentGain = this.inAudioContext.createGain();
+    silentGain.gain.setValueAtTime(0, this.inAudioContext.currentTime);
     this.sourceNode.connect(this.workletNode);
-    this.workletNode.connect(this.inAudioContext.destination);
+    this.workletNode.connect(silentGain);
+    silentGain.connect(this.inAudioContext.destination);
 
     this.sessionPromise = this.ai.live.connect({
       model: this.model,
@@ -242,7 +285,7 @@ export class GeminiLiveAudio {
 
     // Worklet now posts base64 strings directly (encoding already done off main thread)
     this.workletNode.port.onmessage = (e) => {
-      if (!this.isSessionActive || this.isIntentionalDisconnect || !this.session) return;
+      if (!this.isSessionActive || this.isIntentionalDisconnect || !this.session || this.isMicMuted) return;
 
       const base64: string = e.data;
 
@@ -260,7 +303,7 @@ export class GeminiLiveAudio {
 
       try {
         this.session.sendRealtimeInput({
-          audio: {
+          media: {
             data: base64,
             mimeType: "audio/pcm;rate=16000",
           }
@@ -435,11 +478,11 @@ export class GeminiLiveAudio {
       this.sourceNode = null;
     }
     if (this.inAudioContext) {
-      this.inAudioContext.close();
+      void this.inAudioContext.close().catch(() => {});
       this.inAudioContext = null;
     }
     if (this.outAudioContext) {
-      this.outAudioContext.close();
+      void this.outAudioContext.close().catch(() => {});
       this.outAudioContext = null;
     }
     if (this.sessionPromise) {

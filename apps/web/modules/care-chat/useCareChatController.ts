@@ -349,18 +349,16 @@ export function useCareChatController() {
   }
 
   async function ensureCallAudioSession(options?: { forceRetry?: boolean }) {
-    const forceRetry = options?.forceRetry ?? false;
-
     if (typeof window === "undefined") {
       return false;
     }
 
     if (localMicStreamRef.current) {
-      return true;
-    }
-
-    if (!forceRetry && (micPermissionStateRef.current === "denied" || micPermissionStateRef.current === "unsupported")) {
-      return false;
+      const tracks = localMicStreamRef.current.getAudioTracks();
+      if (tracks.length > 0 && tracks[0].readyState === "live") {
+        return true;
+      }
+      stopMicAudioSession();
     }
 
     if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== "function") {
@@ -371,14 +369,22 @@ export function useCareChatController() {
     }
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        },
-        video: false
-      });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          },
+          video: false
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+          video: false
+        });
+      }
 
       localMicStreamRef.current = stream;
       setMicPermissionState("granted");
@@ -386,10 +392,12 @@ export function useCareChatController() {
       applyMicMutedState(isMicMuted);
       showToast("Microphone connected");
       return true;
-    } catch {
-      setMicPermissionState("denied");
-      micPermissionStateRef.current = "denied";
-      showToast("Microphone permission denied");
+    } catch (err: unknown) {
+      const error = err as Error;
+      const isDenied = error?.name === "NotAllowedError" || error?.name === "PermissionDeniedError";
+      setMicPermissionState(isDenied ? "denied" : "unknown");
+      micPermissionStateRef.current = isDenied ? "denied" : "unknown";
+      showToast(isDenied ? "Microphone permission denied. Please allow mic in browser." : "Could not connect microphone.");
       return false;
     }
   }
@@ -406,6 +414,9 @@ export function useCareChatController() {
       const nextMuted = !isMicMuted;
       setIsMicMuted(nextMuted);
       applyMicMutedState(nextMuted);
+      if (geminiAudioRef.current) {
+        geminiAudioRef.current.setMicMuted(nextMuted);
+      }
       showToast(nextMuted ? "Microphone muted" : "Microphone unmuted");
     })();
   }
@@ -443,13 +454,6 @@ export function useCareChatController() {
     if (call.status === "ringing") {
       if (call.direction === "incoming" && lastIncomingRingTokenRef.current !== call.ringToken) {
         lastIncomingRingTokenRef.current = call.ringToken;
-
-        // Auto-decline incoming calls if microphone permission is denied/unsupported
-        if (micPermissionStateRef.current === "denied" || micPermissionStateRef.current === "unsupported") {
-          showToast("Incoming call missed: Microphone permission is denied.");
-          void updateCallState("end");
-          return;
-        }
 
         showToast(`Incoming call from ${call.contactName}`);
         notifyIncomingCall(call.contactName);
@@ -577,7 +581,9 @@ export function useCareChatController() {
     if (call.status === "ended") {
       setCallStatus("Call ended");
       if (activeView === "calling") {
-        switchView("chat");
+        window.setTimeout(() => {
+          switchView("chat");
+        }, 800);
       }
       return;
     }
@@ -866,12 +872,12 @@ export function useCareChatController() {
       return;
     }
 
-    const hasAudio = await ensureCallAudioSession();
+    const hasAudio = await ensureCallAudioSession({ forceRetry: true });
     if (!hasAudio) {
       setIsRinging(false);
       isRingingRef.current = false;
       await updateCallState("end");
-      showToast("Cannot receive call: Microphone permission is required.");
+      showToast("Cannot connect call: Microphone permission is required.");
       if (activeView === "calling") {
         switchView("chat");
       }
@@ -910,10 +916,8 @@ export function useCareChatController() {
       return;
     }
 
-    if (micPermissionStateRef.current === "denied" || micPermissionStateRef.current === "unsupported") {
-      showToast("Cannot start call: Microphone permission is denied.");
-      return;
-    }
+    // Immediately request mic session within the user click gesture context
+    void ensureCallAudioSession({ forceRetry: true });
 
     setCallStatus("Calling...");
     setCallDurationSeconds(0);
@@ -1041,7 +1045,13 @@ export function useCareChatController() {
     setCallDurationSeconds(0);
     setIsCallOnHold(false);
     isCallOnHoldRef.current = false;
-    switchView("chat");
+    setCallStatus("Call ended");
+
+    if (activeView === "calling") {
+      window.setTimeout(() => {
+        switchView("chat");
+      }, 800);
+    }
   }
 
 
