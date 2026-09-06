@@ -49,6 +49,7 @@ npm run dev
 You can execute the following commands from the project root:
 
 - `npm run dev`: Starts the Next.js development server.
+- `npm start`: Starts the Next.js production server.
 - `npm run build`: Compiles all packages and workspaces to `/dist` and `/out`.
 - `npm run typecheck`: Runs typescript validation across the entire workspace.
 - `npm run lint`: Analyzes the `@rhc/web` workspace using ESLint.

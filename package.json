@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace @rhc/web -- --hostname 0.0.0.0",
+    "start": "npm run start --workspace @rhc/web -- --hostname 0.0.0.0",
     "build:packages": "npm run build --workspace @rhc/types && npm run build --workspace @rhc/safety && npm run build --workspace @rhc/triage && npm run build --workspace @rhc/policy && npm run build --workspace @rhc/tools && npm run build --workspace @rhc/ai && npm run build --workspace @rhc/medical && npm run build --workspace @rhc/db && npm run build --workspace @rhc/obs && npm run build --workspace @rhc/rag && npm run build --workspace @rhc/scheduler && npm run build --workspace @rhc/ingest && npm run build --workspace @rhc/agents && npm run build --workspace @rhc/worker",
     "build": "npm run build:packages && npm run build --workspace @rhc/web",
     "lint": "npm run lint --workspace @rhc/web",
