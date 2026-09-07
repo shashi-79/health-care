@@ -16,7 +16,7 @@ describe("Policy Engine", () => {
     expect(() => assertBgModel("anthropic/claude-haiku-4.5")).not.toThrow();
     expect(() => assertBgModel("")).toThrow("BG model is not configured.");
 
-    expect(() => assertCallModel("gemini-2.5-flash-native-audio")).not.toThrow();
+    expect(() => assertCallModel("gemini-2.5-flash-native-audio-latest")).not.toThrow();
     expect(() => assertCallModel("")).toThrow("Call model is not configured.");
   });
 

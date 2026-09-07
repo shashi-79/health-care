@@ -126,14 +126,38 @@ export class GeminiLiveAudio {
   private gainNode: GainNode | null = null;
   private isSpeakerMuted: boolean = false;
   private isMicMuted: boolean = false;
+  private hasSentGreeting: boolean = false;
 
   constructor(apiKey: string, model?: string) {
     this.ai = new GoogleGenAI({ apiKey });
-    this.model = model || "gemini-2.5-flash-native-audio-preview-12-2025";
+    this.model = model || "gemini-2.5-flash-native-audio-latest";
   }
 
   setMicMuted(muted: boolean) {
     this.isMicMuted = muted;
+  }
+
+  sendGreeting(script: string) {
+    if (!script || this.hasSentGreeting) return;
+    this.hasSentGreeting = true;
+    const send = (session: Session) => {
+      try {
+        session.sendClientContent({
+          turns: [{
+            role: "user",
+            parts: [{ text: `The call has connected. Please greet the patient now. Use this greeting script: "${script}"` }]
+          }],
+          turnComplete: true
+        });
+      } catch (e) {
+        console.error("Error sending opening script:", e);
+      }
+    };
+    if (this.session) {
+      send(this.session);
+    } else if (this.sessionPromise) {
+      this.sessionPromise.then(send).catch(() => {});
+    }
   }
 
   async startStream(
@@ -143,6 +167,7 @@ export class GeminiLiveAudio {
     openingScript?: string
   ) {
     this.isIntentionalDisconnect = false;
+    this.hasSentGreeting = false;
     const AudioCtx =
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -221,20 +246,8 @@ export class GeminiLiveAudio {
         onopen: () => {
            console.log("Live API opened");
            this.isSessionActive = true;
-           if (openingScript && this.sessionPromise) {
-             this.sessionPromise.then((session) => {
-               try {
-                 session.sendClientContent({
-                   turns: [{
-                     role: "user",
-                     parts: [{ text: `The call has connected. Please greet the patient now. Use this greeting script: "${openingScript}"` }]
-                   }],
-                   turnComplete: true
-                 });
-               } catch (e) {
-                 console.error("Error sending opening script:", e);
-               }
-             }).catch(() => {});
+           if (openingScript) {
+             this.sendGreeting(openingScript);
            }
         },
         onclose: (e: CloseEvent) => {
@@ -258,7 +271,11 @@ export class GeminiLiveAudio {
                 onServerResponse(part.text);
               }
             }
-          } else if (msg.toolCall) {
+          }
+          if (serverContent?.outputTranscription?.text && onServerResponse) {
+            onServerResponse(serverContent.outputTranscription.text);
+          }
+          if (msg.toolCall) {
             const calls = msg.toolCall.functionCalls;
             if (calls && calls.length > 0) {
               const responses = calls.map((call) => {
@@ -396,6 +413,10 @@ export class GeminiLiveAudio {
   private flushPlaybackQueue() {
     if (!this.outAudioContext || this.playbackQueue.length === 0) return;
 
+    if (this.outAudioContext.state === "suspended") {
+      void this.outAudioContext.resume().catch(() => {});
+    }
+
     const chunks = this.playbackQueue.splice(0);
 
     try {
@@ -406,8 +427,10 @@ export class GeminiLiveAudio {
       for (const base64 of chunks) {
         const binaryString = atob(base64);
         const len = binaryString.length;
-        const bytes = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
+        const evenLen = len - (len % 2);
+        if (evenLen === 0) continue;
+        const bytes = new Uint8Array(evenLen);
+        for (let i = 0; i < evenLen; i++) {
           bytes[i] = binaryString.charCodeAt(i);
         }
         const pcm16 = new Int16Array(bytes.buffer);
@@ -457,6 +480,7 @@ export class GeminiLiveAudio {
   stop() {
     this.isIntentionalDisconnect = true;
     this.isSessionActive = false;
+    this.hasSentGreeting = false;
     this.session = null;
 
     this.stopPlaybackTimer();

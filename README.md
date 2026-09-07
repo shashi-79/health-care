@@ -24,7 +24,7 @@ You need to configure the environment variables required by the various LLM clie
 2. Ensure you have the following keys ready:
    - `NEXT_PUBLIC_GEMINI_API_KEY`: API Key for Google Gemini (Used for the Gemini Live Audio voice engine).
    - `OPENROUTER_API_KEY`: API Key for OpenRouter (Used for all LLM medical background, NLP triage, and orchestrator features).
-   - _Optional:_ `NEXT_PUBLIC_CALL_MODEL`: E.g., `gemini-2.5-flash-native-audio-preview-12-2025`
+   - _Optional:_ `NEXT_PUBLIC_CALL_MODEL`: E.g., `gemini-2.5-flash-native-audio-latest`
 
 ## 🚀 Running the Project
 

@@ -195,6 +195,7 @@ export function useCareChatController() {
   const localMicStreamRef = useRef<MediaStream | null>(null);
   const geminiAudioRef = useRef<GeminiLiveAudio | null>(null);
   const geminiInitInFlightRef = useRef(false);
+  const callOpeningScriptRef = useRef("");
   const syncInFlightRef = useRef(false);
 
   const lastCallUpdatedAtRef = useRef("");
@@ -479,26 +480,33 @@ export function useCareChatController() {
       isRingingRef.current = false;
 
       // Guard: prevent double Gemini Live initialization from polling sync
-      if (!geminiInitInFlightRef.current) {
+      if (!geminiInitInFlightRef.current && !geminiAudioRef.current) {
+        geminiInitInFlightRef.current = true;
         void ensureCallAudioSession().then((ready) => {
           if (!ready) {
+            geminiInitInFlightRef.current = false;
             endCall();
             return;
           }
-          if (ready && localMicStreamRef.current && !geminiAudioRef.current && !geminiInitInFlightRef.current) {
-            geminiInitInFlightRef.current = true;
+          if (ready && localMicStreamRef.current && !geminiAudioRef.current) {
             try {
               const apiKey = process.env.NEXT_PUBLIC_GEMINI_API_KEY || "";
-              const callModel = process.env.NEXT_PUBLIC_CALL_MODEL;
-              if (!callModel) {
-                throw new Error("NEXT_PUBLIC_CALL_MODEL is not configured in environment variables.");
-              }
+              const callModel = process.env.NEXT_PUBLIC_CALL_MODEL || "gemini-2.5-flash-native-audio-latest";
               geminiAudioRef.current = new GeminiLiveAudio(apiKey, callModel);
               geminiAudioRef.current.setSpeakerMuted(!isSpeakerEnabled || isCallOnHold);
+              const scriptToUse = callOpeningScriptRef.current || "Hello, this is Sehat Saathi from the Rural Healthcare Department. I am your care coordinator. How are you feeling today?";
               void geminiAudioRef.current.startStream(
                 localMicStreamRef.current,
-                () => {
-                  // Received transcript from model
+                (text) => {
+                  if (text && text.trim()) {
+                    appendMessage({
+                      id: nextMessageId(),
+                      kind: "text",
+                      role: "bot",
+                      text: text.trim(),
+                      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                    });
+                  }
                 },
                 (name, args) => {
                   if (name === "request_prescription_info" && args.drugName) {
@@ -524,7 +532,8 @@ export function useCareChatController() {
                       })
                     }).catch(() => {});
                   }
-                }
+                },
+                scriptToUse
               );
             } catch (err) {
               geminiInitInFlightRef.current = false;
@@ -963,11 +972,15 @@ export function useCareChatController() {
 
         const openingScript = init?.call?.agent?.openingScript?.trim();
         if (openingScript) {
+          callOpeningScriptRef.current = openingScript;
           appendMessage({
             id: nextMessageId(),
             kind: "system",
             text: `Call Brief • ${openingScript}`
           });
+          if (geminiAudioRef.current) {
+            geminiAudioRef.current.sendGreeting(openingScript);
+          }
         }
 
         if (init?.usedCallAgent) {
@@ -1041,6 +1054,7 @@ export function useCareChatController() {
     setIsRinging(false);
     isRingingRef.current = false;
     stopMicAudioSession();
+    callOpeningScriptRef.current = "";
     setCallDirection(null);
     setCallDurationSeconds(0);
     setIsCallOnHold(false);
