@@ -1,4 +1,4 @@
-# Rural Health Copilot
+# Health Care
 
 An AI-powered telemedicine web platform designed to provide medical insights, automated background triage, FDA-verified dosage lookup, and live multilingual voice assistant features natively running through the browser.
 
